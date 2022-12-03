@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+        "array": "cpp",
+        "tuple": "cpp",
+        "variant": "cpp",
+        "utility": "cpp",
+        "stdexcept": "cpp"
+    },
+    "cmake.configureOnOpen": false
+}
