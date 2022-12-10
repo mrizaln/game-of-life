@@ -9,6 +9,8 @@ if [[ -z "$3" ]]; then
     out="a.out"
 fi
 
+rm "$out"
+
 g++\
     -O$opt\
     -std=c++20\
@@ -23,3 +25,5 @@ g++\
     -lXi\
     -ldl\
     -o "$out"
+
+echo "compile status: $?"
