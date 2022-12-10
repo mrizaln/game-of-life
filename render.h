@@ -5,6 +5,7 @@
 
 #include <algorithm>        // for std::min
 #include <iostream>
+#include <string>
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -17,7 +18,7 @@
 
 namespace RenderEngine
 {
-    GLFWwindow* initializeWindow();
+    GLFWwindow* initializeWindow(const std::string&);
 
     void framebuffer_size_callback(GLFWwindow*, int, int);
     void cursor_position_callback(GLFWwindow*, double, double);
@@ -80,7 +81,7 @@ namespace RenderEngine
     namespace simulation
     {
         bool pause{ false };
-        
+
         enum GridMode
         {
             OFF,
@@ -89,7 +90,7 @@ namespace RenderEngine
 
             numOfGridModes,
         };
-        GridMode gridMode{ ON };
+        GridMode gridMode{ AUTO };
     }
 
     namespace data
@@ -106,7 +107,7 @@ namespace RenderEngine
 
     int initialize(Grid& grid, float delay=1e-5f)
     {
-        data::window = initializeWindow();
+        data::window = initializeWindow("Game of Life");
         if (!data::window)
         {
             std::cout << "There's an error when creating window.\n";
@@ -180,6 +181,12 @@ namespace RenderEngine
         model = glm::scale(model, data::gridTile->m_scale);
         data::gridTile->m_shader.setMat4("model", model);
 
+        // change color if simulation::pause
+        if (!simulation::pause)
+            data::gridTile->m_color = { 1.0f, 1.0f, 1.0f };
+        else
+            data::gridTile->m_color = { 0.7f, 1.0f, 0.7f };
+
         // draw
         data::gridTile->draw();
     }
@@ -231,8 +238,12 @@ namespace RenderEngine
 
     void render()
     {
-        // draw
-        glClearColor(0.1f, 0.1f, 0.11f, 1.0f);
+        // background color
+        if (!simulation::pause)
+            glClearColor(0.1f, 0.1f, 0.11f, 1.0f);
+        else
+            glClearColor(0.0f, 0.0f, 0.02f, 1.0f);
+
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // orthogonal frustum
@@ -279,7 +290,7 @@ namespace RenderEngine
 
 //=================================================================================================
 
-    GLFWwindow* initializeWindow()
+    GLFWwindow* initializeWindow(const std::string& windowName)
     {
         // initialize glfw
         glfwInit();
@@ -288,7 +299,7 @@ namespace RenderEngine
         glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
         // window creation
-        GLFWwindow* window{ glfwCreateWindow(configuration::width, configuration::height, "Traffic Model", NULL, NULL) };
+        GLFWwindow* window{ glfwCreateWindow(configuration::width, configuration::height, windowName.c_str(), NULL, NULL) };
         if (!window)
         {
             std::cerr << "Failed to create GLFW window\n";
@@ -459,7 +470,6 @@ namespace RenderEngine
         {
             // cycle through the modes
             simulation::gridMode = static_cast<simulation::GridMode>((simulation::gridMode + 1) % simulation::GridMode::numOfGridModes);
-            std::cout << simulation::gridMode << '\n';
         }
 
         if (key == GLFW_KEY_R && action == GLFW_PRESS)
@@ -502,14 +512,14 @@ namespace RenderEngine
     }
 
     void resetCamera(bool resetZoom)
-    {        
+    {
         auto& [numOfColumns, numOfRows]{ data::gridPtr->getDimension()};
 
         // center camera
         camera::camera->position.x = numOfColumns/2.0f;
         camera::camera->position.y = -numOfRows/2.0f;
 
-        constexpr int maxCol{ 100 };
+        constexpr int maxCol{ 75 };
 
         if (resetZoom)
             camera::camera->zoom = std::max({
@@ -546,7 +556,7 @@ namespace RenderEngine
         // current pos
         int x{ camera::camera->position.x - (xDelta - 2.0f*xPos/camera::camera->zoom) + offset };    // col
         int y{ camera::camera->position.y + (yDelta - 2.0f*yPos/camera::camera->zoom) - offset };    // -row (up-down flipped)
-        
+
         // last pos
         int x_last{ camera::camera->position.x - (xDelta - 2.0f*xPos_last/camera::camera->zoom) + offset };    // last col
         int y_last{ camera::camera->position.x + (yDelta - 2.0f*yPos_last/camera::camera->zoom) - offset };    // last -row
