@@ -1,0 +1,12 @@
+[
+{
+  "directory": "/home/mrizaln/Projects/C++/Game of Life/build/linux-release",
+  "command": "/usr/bin/c++  -I\"/home/mrizaln/Projects/C++/Game of Life/include\" -I\"/home/mrizaln/Projects/C++/Game of Life/include/glad/include/glad\" -O3 -DNDEBUG -std=gnu++20 -o CMakeFiles/main.dir/main.cpp.o -c \"/home/mrizaln/Projects/C++/Game of Life/main.cpp\"",
+  "file": "/home/mrizaln/Projects/C++/Game of Life/main.cpp"
+},
+{
+  "directory": "/home/mrizaln/Projects/C++/Game of Life/build/linux-release/include/glad",
+  "command": "/usr/bin/cc  -I\"/home/mrizaln/Projects/C++/Game of Life/include/glad/include/glad\" -O3 -DNDEBUG -o CMakeFiles/glad.dir/glad.c.o -c \"/home/mrizaln/Projects/C++/Game of Life/include/glad/glad.c\"",
+  "file": "/home/mrizaln/Projects/C++/Game of Life/include/glad/glad.c"
+}
+]
