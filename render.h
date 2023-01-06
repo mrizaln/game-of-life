@@ -119,14 +119,14 @@ namespace RenderEngine
 
         data::liveCellTile = new Tile{
             1.0f,
-            "./shaders/shader.vs", "./shaders/shader.fs",           // Shader
-            "./textures/cell.png", GL_LINEAR, GL_LINEAR             // Texture
+            "./resources/shaders/shader.vs", "./resources/shaders/shader.fs",           // Shader
+            "./resources/textures/cell.png", GL_LINEAR, GL_LINEAR             // Texture
         };
 
         data::gridTile = new Tile{
             1.0f,
-            "./shaders/shader.vs", "./shaders/shader.fs",                               // Shader
-            "./textures/box.png", GL_LINEAR, GL_LINEAR, GL_REPEAT,                    // Texture
+            "./resources/shaders/shader.vs", "./resources/shaders/shader.fs",                               // Shader
+            "./resources/textures/box.png", GL_LINEAR, GL_LINEAR, GL_REPEAT,                    // Texture
             { data::gridPtr->getLength()/2.0f, -data::gridPtr->getWidth()/2.0f, 0.0f }, // pos
             { 1.0f, 1.0f, 1.0f },                                                       // color
             { data::gridPtr->getLength(), data::gridPtr->getWidth(), 0.0f }             // scale
