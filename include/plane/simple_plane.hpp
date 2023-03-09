@@ -1,5 +1,5 @@
-#ifndef PLANE_H
-#define PLANE_H
+#ifndef SIMPLE_PLANE_H
+#define SIMPLE_PLANE_H
 
 #include <cstddef>
 
