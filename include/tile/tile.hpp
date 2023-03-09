@@ -11,12 +11,12 @@
 #include <shader_header/shader.hpp>
 #include <camera_header/camera.hpp>
 #include <texture_header/texture.hpp>
-#include <plane/plane.hpp>
+#include <plane/simple_plane.hpp>
 
 
 class Tile
 {
-    Plane m_plane{};
+    SimplePlane m_plane{};
     Texture m_texture{};
 
 public:
@@ -78,7 +78,7 @@ public:
     {
     }
 
-    Plane& getPlane() { return m_plane; }
+    SimplePlane& getPlane() { return m_plane; }
 
     void draw()
     {

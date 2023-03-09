@@ -8,7 +8,7 @@
 #include <iostream>
 
 
-class Plane
+class SimplePlane
 {
     static inline float s_planeVertices[]{
         -0.5f, -0.5f, 0.0f,
@@ -51,7 +51,7 @@ class Plane
     unsigned int EBO;
 
 public:
-    Plane(float sideLength = 1.0f)
+    SimplePlane(float sideLength = 1.0f)
         : m_interleavedVerticesStrideSize{ 8*sizeof(float) }
     {
         // copy vertices multiplied by sidelength
@@ -70,7 +70,7 @@ public:
         setBuffers();
     }
 
-    ~Plane()
+    ~SimplePlane()
     {
         // deleteBuffers();     // segmentation fault???
     }
