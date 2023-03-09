@@ -25,7 +25,7 @@ private:
     GLenum minFilter{};
     GLenum wrapFilter{};
 
-    inline static const std::unordered_map<std::size_t, GLenum> numChannelsToGLenum{
+    inline static std::unordered_map<std::size_t, GLenum> numChannelsToGLenum{
         { 1, GL_RED },
         { 2, GL_RG },
         { 3, GL_RGB },
