@@ -10,10 +10,10 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
-#include <camera_header/camera.h>
-#include <tile/tile.h>
+#include <camera_header/camera.hpp>
+#include <tile/tile.hpp>
 
-#include "./game.h"
+#include "./game.hpp"
 
 
 namespace RenderEngine

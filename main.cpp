@@ -3,8 +3,8 @@
 #include <chrono>
 #include <sstream>
 
-#include "./game.h"
-#include "./render.h"
+#include "./game.hpp"
+#include "./render.hpp"
 
 
 int main(int argc, char** argv)

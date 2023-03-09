@@ -8,10 +8,10 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-#include <shader_header/shader.h>
-#include <camera_header/camera.h>
-#include <texture_header/texture.h>
-#include <plane/plane.h>
+#include <shader_header/shader.hpp>
+#include <camera_header/camera.hpp>
+#include <texture_header/texture.hpp>
+#include <plane/plane.hpp>
 
 
 class Tile
