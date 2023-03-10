@@ -4,9 +4,12 @@
 // #define DEBUG
 
 #include <algorithm>    // for std::min
+#include <atomic>
 #include <cmath>
 #include <cstddef>
+#include <exception>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -26,6 +29,7 @@
 namespace RenderEngine
 {
     GLFWwindow* initializeWindow(const std::string&);
+    void        reset();
 
     void framebuffer_size_callback(GLFWwindow*, int, int);
     void cursor_position_callback(GLFWwindow*, double, double);
@@ -38,7 +42,7 @@ namespace RenderEngine
     void updateCamera();
     void processMouseButton();
     void processInput(GLFWwindow*);
-    void updateStates();
+    bool updateStates(int, int, int, int);
     void updateDeltaTime();
 
     //=================================================================================================
@@ -73,19 +77,12 @@ namespace RenderEngine
     namespace camera
     {
         Camera* camera{};
-
-        enum Mode
-        {
-            FOLLOW_NONE,
-
-            numOfModes
-        };
-        Mode follow{};
     }
 
     namespace simulation
     {
         bool pause{ false };
+        bool stop{ false };
 
         enum GridMode
         {
@@ -98,12 +95,37 @@ namespace RenderEngine
         GridMode gridMode{ AUTO };
     }
 
+    namespace fps_counter
+    {
+        int       counter{ 0 };
+        const int interval{ 20 };    // print every this N interval
+        float     sum{ 0 };
+
+        void updateFps()
+        {
+            if (counter++ % interval == 0) {
+                std::cout << "\n\033[1A\033[2KFPS: " << 1 / (sum / interval);
+                sum = 0.0f;
+            }
+            sum += timing::deltaTime;
+        }
+    }
+
     namespace data
     {
         Grid*       gridPtr{};
         GLFWwindow* window{};
         Tile*       gridBorderTile{};
         GridTile*   gridTile{};
+
+        namespace thread
+        {
+            std::optional<std::thread> workerThread{ std::nullopt };
+            std::atomic<bool>          done{ false };
+            bool                       block{ true };
+            bool                       once{ false };
+
+        }
     }
 
     //=================================================================================================
@@ -147,6 +169,19 @@ namespace RenderEngine
         timing::delay = delay;
 
         return 0;
+    }
+
+    void reset()
+    {
+        try {
+            data::thread::workerThread->join();
+        } catch (std::exception& e) {
+            std::cerr << "\n\nError: " << e.what() << " (" << typeid(e).name() << ")\n";
+        }
+
+        delete data::gridTile;
+        delete data::gridBorderTile;
+        delete camera::camera;
     }
 
     void drawBorder(const glm::mat4& projMat, const glm::mat4& viewMat)
@@ -197,7 +232,7 @@ namespace RenderEngine
         data::gridBorderTile->draw();
     }
 
-    void drawGrid(const glm::mat4& projMat, const glm::mat4& viewMat, int left, int right, int top, int bottom)
+    void drawGrid(const glm::mat4& projMat, const glm::mat4& viewMat, int left, int right, int top, int bottom, bool update = false)
     {
         // idk
         data::gridTile->m_shader.use();
@@ -212,6 +247,16 @@ namespace RenderEngine
 
         const auto& xPos{ camera::camera->position.x };
         const auto& yPos{ camera::camera->position.y };
+        const auto& [width, height]{ data::gridPtr->getDimension() };
+
+        constexpr float offset{ 1.5f };
+        // clang-format off
+        const int rowLeftBorder  { static_cast<int>(  xPos + left       - offset  > 0      ?   xPos + left   - offset  : 0) };
+        const int rowRightBorder { static_cast<int>(  xPos + right + 1  + offset  < width  ?   xPos + right  + offset  : width) };
+        const int colTopBorder   { static_cast<int>(-(yPos + top        + offset) > 0      ? -(yPos + top    + offset) : 0) };
+        const int colBottomBorder{ static_cast<int>(-(yPos + bottom + 1 - offset) < height ? -(yPos + bottom - offset) : height) };    // y up-down inverted
+        // clang-format on
+
         data::gridTile->setState(data::gridPtr->data(), xPos, yPos, left, right, top, bottom);
         data::gridTile->draw();
     }
@@ -241,11 +286,18 @@ namespace RenderEngine
         // view matrix
         auto viewMat{ camera::camera->getViewMatrix() };
 
+        // update states
+        bool shouldUpdateFrame{ updateStates(left, right, top, bottom) };    // update grid if timing::sumTime > delay
+        // if (!simulation::pause) {
+        //     data::gridPtr->updateState();
+        // }
+
         // grid
         drawBorder(projMat, viewMat);
 
         // new grid
-        drawGrid(projMat, viewMat, left, right, top, bottom);
+        drawGrid(projMat, viewMat, left, right, top, bottom, shouldUpdateFrame);
+        // drawGrid(projMat, viewMat, left, right, top, bottom);
 
         glfwSwapBuffers(data::window);
         updateCamera();
@@ -263,8 +315,8 @@ namespace RenderEngine
         std::cout << timing::deltaTime << '\n';
 #endif
 
-        // update states
-        updateStates();    // update grid if timing::sumTime > delay
+        // fps
+        fps_counter::updateFps();
     }
 
     //=================================================================================================
@@ -403,34 +455,43 @@ namespace RenderEngine
             }
         }
 
-        // set camera target to box
+        // set camera target to center
         if (key == GLFW_KEY_BACKSPACE && action == GLFW_PRESS) {
             resetCamera();
-
-            // reset position to box
-            // const auto& boxPos{ data::gridPtr->getBox().getPosition() };
-            // camera::camera->position.x = boxPos.x;
-            // camera::camera->position.y = -boxPos.y+0.5;
         }
 
         if (key == GLFW_KEY_SPACE && action == GLFW_PRESS) {
             simulation::pause = !simulation::pause;
         }
 
+        static bool pauseBefore{};
         if (key == GLFW_KEY_U && action == GLFW_PRESS) {
-            data::gridPtr->updateState();
+
+            data::thread::block = true;
+
+            // data::gridPtr->updateState();
+            pauseBefore = simulation::pause;
+            if (pauseBefore == true) {
+                simulation::pause = false;
+            }
+        } else if (key == GLFW_KEY_U && action == GLFW_RELEASE) {
+            simulation::pause = pauseBefore;
         }
 
+        // fit to screen
         if (key == GLFW_KEY_F && action == GLFW_PRESS) {
-            // cycle through the modes
-            camera::follow = static_cast<camera::Mode>((camera::follow + 1) % camera::Mode::numOfModes);
+            auto& s{ camera::camera->speed };
+            auto& Z{ camera::camera->zoom };
 
-            // also resets the camera offset and zoom
-            resetCamera(true);
+            camera::camera->zoom = 2 / 1.0f * configuration::width / float(data::gridPtr->getLength());
+
+            auto n{ std::abs(std::log(Z / Camera::s_ZOOM) / std::log(1.1f)) };
+
+            camera::camera->speed = 100.0f * std::pow(1.01f, n);
         }
 
+        // cycle through the grid modes
         if (key == GLFW_KEY_G && action == GLFW_PRESS) {
-            // cycle through the modes
             simulation::gridMode = static_cast<simulation::GridMode>((simulation::gridMode + 1) % simulation::GridMode::numOfGridModes);
         }
 
@@ -447,7 +508,7 @@ namespace RenderEngine
     int shouldClose()
     {
         if (data::window) {
-            return glfwWindowShouldClose(data::window);
+            return simulation::stop = glfwWindowShouldClose(data::window);
         } else {
             return false;
         }
@@ -463,15 +524,6 @@ namespace RenderEngine
         }
         if (timing::deltaTime > timing::delay) {
             delay = timing::deltaTime;
-        }
-
-        // if (camera::follow)
-        // camera::camera->position.x += data::gridPtr->getAverageSpeed().first*timing::deltaTime/delay * !simulation::pause;
-
-        switch (camera::follow) {
-        case camera::Mode::FOLLOW_NONE:
-        default:
-            return;
         }
     }
 
@@ -496,14 +548,43 @@ namespace RenderEngine
         }
     }
 
-    void updateStates()
+    bool updateStates(int left, int right, int top, int bottom)
     {
-        if (timing::delay > timing::sumTime || simulation::pause) {
-            return;
+        using namespace data::thread;
+
+        if (block || mouse::leftButtonPressed || mouse::rightButtonPressed) {
+            block = false;
+            data::gridTile->setState(data::gridPtr->data(), camera::camera->position.x, camera::camera->position.y, left, right, top, bottom);
+
+            return true;
         }
 
-        data::gridPtr->updateState();
-        timing::sumTime = 0.0f;
+        if ((timing::delay > timing::sumTime /* || simulation::pause */) && !block) {
+            return false;
+        }
+
+        if (!workerThread.has_value()) {
+            workerThread.emplace([&](int xPos, int yPos, int left, int right, int top, int bottom) {
+                data::gridTile->setState(data::gridPtr->data(), xPos, yPos, left, right, top, bottom);
+                if (!simulation::pause) {
+                    data::gridPtr->updateState();
+                }
+                done = true;
+            },
+                camera::camera->position.x, camera::camera->position.y, left, right, top, bottom);
+        } else {
+            if (done) {
+                // std::cout << "Join\n";
+                workerThread->join();
+                workerThread.reset();
+                timing::sumTime = 0.0f;
+
+                done = false;
+                return true;
+            }
+        }
+
+        return false;
     }
 
     void processMouseButton()
@@ -552,6 +633,9 @@ namespace RenderEngine
                 auto& cell{ data::gridPtr->getCell(x, -y) };
                 cell.setLive();
                 cell.update();
+
+                // block thread
+                data::thread::block = true;
             }
         } else if (mouse::rightButtonPressed) {
             // current click
@@ -559,6 +643,9 @@ namespace RenderEngine
                 auto& cell{ data::gridPtr->getCell(x, -y) };
                 cell.setDead();
                 cell.update();
+
+                // block thread
+                data::thread::block = true;
             }
         }
     }
