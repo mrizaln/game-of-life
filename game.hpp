@@ -2,12 +2,15 @@
 #include <ctime>
 #include <functional>
 #include <iostream>
+#include <limits>
 #include <random>
 #include <stdexcept>
 #include <thread>
 #include <utility>    // for std::pair
 #include <vector>
 #include <execution>
+
+#include <perlin_noise/PerlinNoise.hpp>
 
 #ifndef GAME_H
 #define GAME_H
@@ -59,9 +62,20 @@ private:
     // 0 < probability < 1
     static bool getRandomBool(float probability)
     {
-        int   num{ getRandomNumber(0, std::numeric_limits<int>::max()) };
-        float numNormalized{ static_cast<float>(num) / std::numeric_limits<int>::max() };
-        return numNormalized < probability;
+        static std::mt19937 mt{ static_cast<std::mt19937::result_type>(std::time(nullptr)) };
+        return std::uniform_real_distribution<float>{}(mt) < probability;
+    }
+
+    bool shouldSpawn(int x, int y, float probability)
+    {
+        static const siv::BasicPerlinNoise<float> perlin{ static_cast<siv::PerlinNoise::seed_type>(std::time(nullptr)) };
+        static const float                        freq{ 8.0f };
+        static const int                          octave{ 8 };
+
+        const float fx{ freq / m_length };
+        const float fy{ freq / m_width };
+
+        return perlin.octave2D_01(fx * x, fy * y, octave) < probability;
     }
 
 public:
@@ -76,15 +90,17 @@ public:
 
     void populate(const float density)
     {
-        for (auto& row : m_grid) {
-            for (auto& cell : row) {
-                switch (getRandomBool(density)) {
-                case true:
+        // for (auto& row : m_grid) {
+        for (Coord_type i{ 0 }; i < m_length; ++i) {
+            auto& row{ m_grid[i] };
+            // for (auto& cell : row) {
+            for (Coord_type j{ 0 }; j < m_width; ++j) {
+                auto& cell{ (*this)(i, j) };
+                // if (getRandomBool(density)) {
+                if (shouldSpawn(i, j, density)) {
                     cell.setLive();
-                    break;
-                case false:
+                } else {
                     cell.setDead();
-                    break;
                 }
             }
         }
