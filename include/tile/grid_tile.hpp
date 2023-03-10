@@ -16,7 +16,6 @@
 #include <camera_header/camera.hpp>
 #include <texture_header/texture.hpp>
 #include <plane/plane.hpp>
-#include <thread>
 
 #include <timer/timer.h>
 
@@ -35,16 +34,16 @@ public:
     GridTile()                           = delete;
     GridTile& operator=(const GridTile&) = delete;
 
-    GridTile(const GridTile& tile)
-        : m_plane{ tile.m_plane }        // copy plane VAO, VBO, EBO : points to the same plane as copied
-        , m_shader{ tile.m_shader }      // copy shader ID           : points to the same shader as copied
-        , m_texture{ tile.m_texture }    // copy texture ID          : points to the same texture as copied
-        , m_position{ tile.m_position }
-        , m_color{ tile.m_color }
-        , m_scale{ tile.m_scale }
+    // GridTile(const GridTile& tile)
+    //     : m_plane{ tile.m_plane }        // copy plane VAO, VBO, EBO : points to the same plane as copied
+    //     , m_shader{ tile.m_shader }      // copy shader ID           : points to the same shader as copied
+    //     , m_texture{ tile.m_texture }    // copy texture ID          : points to the same texture as copied
+    //     , m_position{ tile.m_position }
+    //     , m_color{ tile.m_color }
+    //     , m_scale{ tile.m_scale }
 
-    {
-    }
+    // {
+    // }
 
     GridTile(
         int              length,
@@ -72,26 +71,7 @@ public:
 
     auto& getPlane() { return m_plane; }
 
-    // __bool_like type needs to be able to convert itself to bool value
-    template <typename __bool_like>
-    void setState(const std::vector<std::vector<__bool_like>>& state, float xPos, float yPos, int left, int right, int top, int bottom)
-    {
-        const auto height{ state.size() };
-        const auto width{ state[0].size() };
-
-        // culling
-        constexpr float offset{ 1.5f };
-        // clang-format off
-        const int rowLeftBorder  { static_cast<int>(  xPos + left       - offset  > 0      ?   xPos + left   - offset  : 0) };
-        const int rowRightBorder { static_cast<int>(  xPos + right + 1  + offset  < width  ?   xPos + right  + offset  : width) };
-        const int colTopBorder   { static_cast<int>(-(yPos + top        + offset) > 0      ? -(yPos + top    + offset) : 0) };
-        const int colBottomBorder{ static_cast<int>(-(yPos + bottom + 1 - offset) < height ? -(yPos + bottom - offset) : height) };    // y up-down inverted
-        // clang-format on
-
-        m_plane.customizeIndices<__bool_like>(state, rowLeftBorder, rowRightBorder, height - colBottomBorder, height - colTopBorder);
-    }
-
-    void draw(bool update = false)
+    void draw()
     {
         m_shader.use();
 

@@ -15,14 +15,16 @@
 #include <string>
 #include <vector>
 #include <mutex>
+#include <thread>
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
 #include <camera_header/camera.hpp>
-#include <thread>
 #include <tile/tile.hpp>
 #include <tile/grid_tile.hpp>
+
+#include <type_name/type_name.hpp>
 
 #include "./game.hpp"
 
@@ -52,6 +54,8 @@ namespace RenderEngine
         int   width{ 800 };
         int   height{ 600 };
         float aspectRatio{ 800 / static_cast<float>(600) };
+
+        std::string title{ "Game of Life" };
     }
 
     namespace timing
@@ -95,22 +99,6 @@ namespace RenderEngine
         GridMode gridMode{ AUTO };
     }
 
-    namespace fps_counter
-    {
-        int       counter{ 0 };
-        const int interval{ 20 };    // print every this N interval
-        float     sum{ 0 };
-
-        void updateFps()
-        {
-            if (counter++ % interval == 0) {
-                std::cout << "\n\033[1A\033[2KFPS: " << 1 / (sum / interval);
-                sum = 0.0f;
-            }
-            sum += timing::deltaTime;
-        }
-    }
-
     namespace data
     {
         Grid*       gridPtr{};
@@ -123,8 +111,40 @@ namespace RenderEngine
             std::optional<std::thread> workerThread{ std::nullopt };
             std::atomic<bool>          done{ false };
             bool                       block{ true };
-            bool                       once{ false };
+            bool                       doUpdate{ false };
 
+            void blockHere()
+            {
+                if (!workerThread.has_value()) {
+                    return;
+                }
+
+                try {
+                    data::thread::workerThread->join();
+                } catch (std::exception& e) {
+                    std::cerr << "\nThread Error: " << e.what() << " (" << GET_TYPE_NAME_FROM_VAR(e) << ")\n\n";
+                }
+            }
+        }
+    }
+
+    namespace fps_counter
+    {
+        int         counter{ 0 };
+        const float timeInterval{ 1.0f };    // print every this time interval
+        float       sum{ 0 };
+
+        void updateFps()
+        {
+            counter++;
+            if (sum >= timeInterval) {
+                // std::cout << "\n\033[1A\033[2KFPS: " << 1 / (sum / interval);
+                auto title{ configuration::title + " [FPS: " + std::to_string(1 / (sum / counter)).substr(0, 5) + "]" };
+                glfwSetWindowTitle(data::window, title.c_str());
+                sum     = 0.0f;
+                counter = 0;
+            }
+            sum += timing::deltaTime;
         }
     }
 
@@ -143,11 +163,11 @@ namespace RenderEngine
 
         data::gridBorderTile = new Tile{
             1.0f,
-            "./resources/shaders/shader.vs", "./resources/shaders/shader.fs",                  // Shader
-            "./resources/textures/box.png", GL_LINEAR, GL_LINEAR, GL_REPEAT,                   // Texture
-            { data::gridPtr->getLength() / 2.0f, -data::gridPtr->getWidth() / 2.0f, 0.0f },    // pos
-            { 1.0f, 1.0f, 1.0f },                                                              // color
-            { data::gridPtr->getLength(), data::gridPtr->getWidth(), 0.0f }                    // scale
+            "./resources/shaders/shader.vs", "./resources/shaders/shader.fs",                 // Shader
+            "./resources/textures/grid.png", GL_LINEAR, GL_LINEAR, GL_REPEAT,                 // Texture
+            { data::gridPtr->getLength() / 2.0f, data::gridPtr->getWidth() / 2.0f, 0.0f },    // pos
+            { 1.0f, 1.0f, 1.0f },                                                             // color
+            { data::gridPtr->getLength(), data::gridPtr->getWidth(), 0.0f }                   // scale
         };
 
         data::gridBorderTile->getPlane().multiplyTexCoords(data::gridPtr->getLength(), data::gridPtr->getWidth());
@@ -157,9 +177,9 @@ namespace RenderEngine
             data::gridPtr->getWidth(),
             "./resources/shaders/gridShader.vert", "./resources/shaders/gridShader.frag",
             "./resources/textures/cell.png", GL_LINEAR, GL_LINEAR, GL_REPEAT,
-            { data::gridPtr->getLength() / 2.0f, -data::gridPtr->getWidth() / 2.0f, 0.0f },    // pos
-            { 1.0f, 1.0f, 1.0f },                                                              // color
-            { data::gridPtr->getLength(), data::gridPtr->getWidth(), 0.0f }                    // scale
+            { data::gridPtr->getLength() / 2.0f, data::gridPtr->getWidth() / 2.0f, 0.0f },    // pos
+            { 1.0f, 1.0f, 1.0f },                                                             // color
+            { data::gridPtr->getLength(), data::gridPtr->getWidth(), 0.0f }                   // scale
         );
 
         camera::camera        = new Camera{};
@@ -173,11 +193,7 @@ namespace RenderEngine
 
     void reset()
     {
-        try {
-            data::thread::workerThread->join();
-        } catch (std::exception& e) {
-            std::cerr << "\n\nError: " << e.what() << " (" << typeid(e).name() << ")\n";
-        }
+        data::thread::blockHere();
 
         delete data::gridTile;
         delete data::gridBorderTile;
@@ -232,7 +248,7 @@ namespace RenderEngine
         data::gridBorderTile->draw();
     }
 
-    void drawGrid(const glm::mat4& projMat, const glm::mat4& viewMat, int left, int right, int top, int bottom, bool update = false)
+    void drawGrid(const glm::mat4& projMat, const glm::mat4& viewMat, int xStart, int xEnd, int yStart, int yEnd, bool update = false)
     {
         // idk
         data::gridTile->m_shader.use();
@@ -245,19 +261,11 @@ namespace RenderEngine
 
         data::gridTile->m_shader.setMat4("model", model);
 
-        const auto& xPos{ camera::camera->position.x };
-        const auto& yPos{ camera::camera->position.y };
-        const auto& [width, height]{ data::gridPtr->getDimension() };
+        // data::gridTile->setState(data::gridPtr->data(), xStart, xEnd, yStart, yEnd);
+        // data::gridTile->draw();
 
-        constexpr float offset{ 1.5f };
-        // clang-format off
-        const int rowLeftBorder  { static_cast<int>(  xPos + left       - offset  > 0      ?   xPos + left   - offset  : 0) };
-        const int rowRightBorder { static_cast<int>(  xPos + right + 1  + offset  < width  ?   xPos + right  + offset  : width) };
-        const int colTopBorder   { static_cast<int>(-(yPos + top        + offset) > 0      ? -(yPos + top    + offset) : 0) };
-        const int colBottomBorder{ static_cast<int>(-(yPos + bottom + 1 - offset) < height ? -(yPos + bottom - offset) : height) };    // y up-down inverted
-        // clang-format on
-
-        data::gridTile->setState(data::gridPtr->data(), xPos, yPos, left, right, top, bottom);
+        // data::gridTile->getPlane().customizeIndices(data::gridPtr->data(), xStart, xEnd, yStart, yEnd);
+        // data::gridTile->getPlane().swapIndices();
         data::gridTile->draw();
     }
 
@@ -273,12 +281,14 @@ namespace RenderEngine
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // orthogonal frustum
-        const float left{ -configuration::width / static_cast<float>(camera::camera->zoom) };
-        const float right{ configuration::width / static_cast<float>(camera::camera->zoom) };
+        // clang-format off
+        const float left  { -configuration::width  / static_cast<float>(camera::camera->zoom) };
+        const float right {  configuration::width  / static_cast<float>(camera::camera->zoom) };
         const float bottom{ -configuration::height / static_cast<float>(camera::camera->zoom) };
-        const float top{ configuration::height / static_cast<float>(camera::camera->zoom) };
-        const float near{ -10.0f };
-        const float far{ 10.0f };
+        const float top   {  configuration::height / static_cast<float>(camera::camera->zoom) };
+        const float near  { -10.0f };
+        const float far   {  10.0f };
+        // clang-format on
 
         // projection matrix
         auto projMat{ glm::ortho(left, right, bottom, top, near, far) };
@@ -286,8 +296,21 @@ namespace RenderEngine
         // view matrix
         auto viewMat{ camera::camera->getViewMatrix() };
 
+        const auto& xPos{ camera::camera->position.x };
+        const auto& yPos{ camera::camera->position.y };
+        const auto& [width, height]{ data::gridPtr->getDimension() };
+
+        constexpr float offset{ 1.5f };
+        // culling
+        // clang-format off
+        const int rowLeftBorder  { static_cast<int>( xPos + left       - offset > 0      ? xPos + left   - offset : 0) };
+        const int rowRightBorder { static_cast<int>( xPos + right + 1  + offset < width  ? xPos + right  + offset : width) };
+        const int colTopBorder   { static_cast<int>( yPos + top        + offset < height ? yPos + top    + offset : height) };
+        const int colBottomBorder{ static_cast<int>( yPos + bottom + 1 - offset > 0      ? yPos + bottom - offset : 0) };
+        // clang-format on
+
         // update states
-        bool shouldUpdateFrame{ updateStates(left, right, top, bottom) };    // update grid if timing::sumTime > delay
+        bool shouldUpdateFrame{ updateStates(rowLeftBorder, rowRightBorder, colBottomBorder, colTopBorder) };    // update grid if timing::sumTime > delay
         // if (!simulation::pause) {
         //     data::gridPtr->updateState();
         // }
@@ -296,7 +319,7 @@ namespace RenderEngine
         drawBorder(projMat, viewMat);
 
         // new grid
-        drawGrid(projMat, viewMat, left, right, top, bottom, shouldUpdateFrame);
+        drawGrid(projMat, viewMat, rowLeftBorder, rowRightBorder, colBottomBorder, colTopBorder);
         // drawGrid(projMat, viewMat, left, right, top, bottom);
 
         glfwSwapBuffers(data::window);
@@ -354,6 +377,9 @@ namespace RenderEngine
         // enable depth test
         // glEnable(GL_DEPTH_TEST);
         glEnable(GL_BLEND);
+
+        // turn off vsync
+        // glfwSwapInterval(0);
 
         return window;
     }
@@ -455,15 +481,17 @@ namespace RenderEngine
             }
         }
 
-        // set camera target to center
+        // center camera
         if (key == GLFW_KEY_BACKSPACE && action == GLFW_PRESS) {
             resetCamera();
         }
 
+        // pause-unpause
         if (key == GLFW_KEY_SPACE && action == GLFW_PRESS) {
             simulation::pause = !simulation::pause;
         }
 
+        // temporarily unpause
         static bool pauseBefore{};
         if (key == GLFW_KEY_U && action == GLFW_PRESS) {
 
@@ -480,14 +508,21 @@ namespace RenderEngine
 
         // fit to screen
         if (key == GLFW_KEY_F && action == GLFW_PRESS) {
-            auto& s{ camera::camera->speed };
-            auto& Z{ camera::camera->zoom };
-
+            resetCamera();
             camera::camera->zoom = 2 / 1.0f * configuration::width / float(data::gridPtr->getLength());
 
-            auto n{ std::abs(std::log(Z / Camera::s_ZOOM) / std::log(1.1f)) };
+            constexpr int maxCol{ 75 };
 
-            camera::camera->speed = 100.0f * std::pow(1.01f, n);
+            auto& Z{ camera::camera->zoom };
+            auto  z{ std::max({
+                2.0f * configuration::width / float(data::gridPtr->getLength()),    // all grid visible
+                4.0f * configuration::width / float(data::gridPtr->getLength()),    // half column
+                // 4/1.1f * configuration::height/float(numOfRows),     // half row
+
+                2.0f * configuration::width / float(maxCol)    // show only number of maxCol
+            }) };
+            auto  n{ -std::log(Z / z) / std::log(1.1f) };
+            camera::camera->speed = 100.0f * std::pow(1.1f, n/2);
         }
 
         // cycle through the grid modes
@@ -495,13 +530,26 @@ namespace RenderEngine
             simulation::gridMode = static_cast<simulation::GridMode>((simulation::gridMode + 1) % simulation::GridMode::numOfGridModes);
         }
 
+        // reset -> set all cell in grid to dead
         if (key == GLFW_KEY_R && action == GLFW_PRESS) {
             // data::gridPtr->reset();
 
             // if (camera::follow)         // if camera::follow is set to camera::Mode::FOLLOW_NONE, don't reset
             //     resetCamera();
+            data::thread::blockHere();
 
             data::gridPtr->clear();
+        }
+
+        // populate grid with new cells
+        if (key == GLFW_KEY_P && action == GLFW_PRESS) {
+            data::thread::blockHere();
+
+            data::gridPtr->clear();
+            auto density{ data::gridPtr->getRandomProbability() * 0.6f + 0.2f };
+            data::gridPtr->populate(density);
+
+            std::cout << "populate with density: " << density << '\n';
         }
     }
 
@@ -533,7 +581,7 @@ namespace RenderEngine
 
         // center camera
         camera::camera->position.x = numOfColumns / 2.0f;
-        camera::camera->position.y = -numOfRows / 2.0f;
+        camera::camera->position.y = numOfRows / 2.0f;
 
         constexpr int maxCol{ 75 };
 
@@ -548,42 +596,39 @@ namespace RenderEngine
         }
     }
 
-    bool updateStates(int left, int right, int top, int bottom)
+    // return true if thread has done
+    bool updateStates(int xStart, int xEnd, int yStart, int yEnd)
     {
         using namespace data::thread;
 
-        if (block || mouse::leftButtonPressed || mouse::rightButtonPressed) {
-            block = false;
-            data::gridTile->setState(data::gridPtr->data(), camera::camera->position.x, camera::camera->position.y, left, right, top, bottom);
-
-            return true;
-        }
-
-        if ((timing::delay > timing::sumTime /* || simulation::pause */) && !block) {
-            return false;
+        if (timing::sumTime >= timing::delay) {
+            doUpdate        = true;
+            timing::sumTime = 0.0f;
         }
 
         if (!workerThread.has_value()) {
-            workerThread.emplace([&](int xPos, int yPos, int left, int right, int top, int bottom) {
-                data::gridTile->setState(data::gridPtr->data(), xPos, yPos, left, right, top, bottom);
-                if (!simulation::pause) {
+            workerThread.emplace([&](int x1, int x2, int y1, int y2) {
+                data::gridTile->getPlane().customizeIndices(data::gridPtr->data(), x1, x2, y1, y2);
+                if (!simulation::pause && doUpdate) {
                     data::gridPtr->updateState();
+                    doUpdate = false;
                 }
                 done = true;
             },
-                camera::camera->position.x, camera::camera->position.y, left, right, top, bottom);
+                xStart, xEnd, yStart, yEnd);
         } else {
-            if (done) {
-                // std::cout << "Join\n";
-                workerThread->join();
+            if (done || block) {
+                blockHere();
+                // workerThread->join();
                 workerThread.reset();
-                timing::sumTime = 0.0f;
 
-                done = false;
+                done  = false;
+                block = false;
                 return true;
             }
         }
 
+        // std::cout << "Not join\n";
         return false;
     }
 
@@ -593,20 +638,27 @@ namespace RenderEngine
         double yPos{};
         glfwGetCursorPos(data::window, &xPos, &yPos);    // get position relative to top-left corner (in px)
 
+        yPos = configuration::height - yPos;
+
         static double xPos_last{ xPos };
         static double yPos_last{ yPos };
 
         float xDelta{ configuration::width / camera::camera->zoom };
         float yDelta{ configuration::height / camera::camera->zoom };
 
-        constexpr float offset{ 0.0f };
+        constexpr float xOffset{ 0.0f };
+        constexpr float yOffset{ 0.0f };
         // current pos
-        int x{ static_cast<int>(camera::camera->position.x - (xDelta - 2.0f * xPos / camera::camera->zoom) + offset) };    // col
-        int y{ static_cast<int>(camera::camera->position.y + (yDelta - 2.0f * yPos / camera::camera->zoom) - offset) };    // -row (up-down flipped)
+        int x{ static_cast<int>(camera::camera->position.x - (xDelta - 2.0f * xPos / camera::camera->zoom) + xOffset) };    // col
+        int y{ static_cast<int>(camera::camera->position.y - (yDelta - 2.0f * yPos / camera::camera->zoom) + yOffset) };    // row
+
+        // map top-left to bottom-left and fix offset
+        // x = x + xOffset;
+        // y = data::gridPtr->getWidth() - y - yOffset;
 
         // last pos
-        int x_last{ static_cast<int>(camera::camera->position.x - (xDelta - 2.0f * xPos_last / camera::camera->zoom) + offset) };    // last col
-        int y_last{ static_cast<int>(camera::camera->position.x + (yDelta - 2.0f * yPos_last / camera::camera->zoom) - offset) };    // last -row
+        int x_last{ static_cast<int>(camera::camera->position.x - (xDelta - 2.0f * xPos_last / camera::camera->zoom) + xOffset) };    // last col
+        int y_last{ static_cast<int>(camera::camera->position.x - (yDelta - 2.0f * yPos_last / camera::camera->zoom) + yOffset) };    // last row
 
         // for linear interpolation
         float grad{ static_cast<float>((y - yPos_last) / static_cast<float>(x - xPos_last)) };
@@ -629,8 +681,8 @@ namespace RenderEngine
             yPos_last = yPos;
 
             // current click
-            if (data::gridPtr->isInBound(x, -y)) {
-                auto& cell{ data::gridPtr->getCell(x, -y) };
+            if (data::gridPtr->isInBound(x, y)) {
+                auto& cell{ data::gridPtr->getCell(x, y) };
                 cell.setLive();
                 cell.update();
 
@@ -639,8 +691,8 @@ namespace RenderEngine
             }
         } else if (mouse::rightButtonPressed) {
             // current click
-            if (data::gridPtr->isInBound(x, -y)) {
-                auto& cell{ data::gridPtr->getCell(x, -y) };
+            if (data::gridPtr->isInBound(x, y)) {
+                auto& cell{ data::gridPtr->getCell(x, y) };
                 cell.setDead();
                 cell.update();
 
@@ -648,6 +700,10 @@ namespace RenderEngine
                 data::thread::block = true;
             }
         }
+
+        // auto coutBefore{ std::cout.flags() };
+        // std::cout << "cursor pos: [" << std::cout.precision(2) << x << ", " << y << "]\n";
+        // std::cout.flags(coutBefore);
     }
 
     // for continuous input
@@ -661,12 +717,12 @@ namespace RenderEngine
 
         // camera movement
         if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
-            if ((yPos + yDelta) < 0) {
+            if ((yPos + yDelta) < numOfRows) {
                 camera::camera->moveCamera(Camera::UPWARD, timing::deltaTime);
             }
         }
         if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
-            if ((yPos - yDelta) > -numOfRows) {
+            if ((yPos - yDelta) > 0) {
                 camera::camera->moveCamera(Camera::DOWNWARD, timing::deltaTime);
             }
         }
