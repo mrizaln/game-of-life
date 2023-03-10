@@ -54,7 +54,7 @@ int main(int argc, char** argv)
         ss >> pause;
     }
 
-    std::cout << "Creating and populating grid...\n";
+    std::cout << "Creating and populating grid... ";
     Grid grid{ length, width };
     grid.populate(density);
     std::cout << "Done\n";
