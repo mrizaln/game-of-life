@@ -79,6 +79,12 @@ private:
     }
 
 public:
+    // 0.0f < return < 1.0f
+    static float getRandomProbability()
+    {
+        return (getRandomNumber(0, std::numeric_limits<int>::max()) / static_cast<float>(std::numeric_limits<int>::max()));
+    }
+
     Grid(const Coord_type length, const Coord_type width)
         : m_length{ length }
         , m_width{ width }
@@ -97,7 +103,7 @@ public:
             for (Coord_type j{ 0 }; j < m_width; ++j) {
                 auto& cell{ (*this)(i, j) };
                 // if (getRandomBool(density)) {
-                if (shouldSpawn(i, j, density)) {
+                if (shouldSpawn(i, j, density) && getRandomBool(density)) {
                     cell.setLive();
                 } else {
                     cell.setDead();
@@ -162,29 +168,6 @@ public:
         std::for_each(std::execution::par_unseq, m_grid.begin(), m_grid.end(), [&](std::vector<Cell>& row) {
             std::for_each(std::execution::par_unseq, row.begin(), row.end(), [&](Cell& cell) { cell.update(); });
         });
-
-        // for (Coord_type i{ 0 }; i < m_length; ++i) {
-        //     if (threadPool.size() >= MAX_NUM_OF_THREAD*2) {
-        //         for (auto& thread : threadPool) {
-        //             if (!thread.joinable())
-        //                 std::cout << "stuck\n";
-        //             thread.join();
-        //         }
-        //         threadPool.clear();
-        //     }
-
-        //     auto i_cur{ i };
-        //     threadPool.emplace_back([&](int i_cur) {
-        //         for (Coord_type j{ 0 }; j < m_width; ++j) {
-        //             (*this)(i_cur, j).update();
-        //         }
-        //     }, i);
-        // }
-
-        // for (auto& thread : threadPool) {
-        //     thread.join();
-        // }
-        // threadPool.clear();
 
         return *this;
     }
