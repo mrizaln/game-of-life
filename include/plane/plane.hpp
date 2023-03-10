@@ -1,18 +1,14 @@
 #ifndef PLANE_HPP
 #define PLANE_HPP
 
-#include <algorithm>
+#include <algorithm>    // std::generate
 #include <array>
-#include <cstddef>
-#include <functional>
-#include <ios>
+#include <cstddef>    // std::size_t
 #include <iostream>
-#include <iomanip>
-#include <iterator>
 #include <mutex>
-#include <ranges>
-#include <vector>
 #include <optional>
+#include <thread>
+#include <vector>
 
 #include <glad/glad.h>
 
@@ -189,9 +185,9 @@ private:
     int m_subdivideX{};
     int m_subdivideY{};
 
-    std::vector<vec_type>                    m_vertices;
-    std::vector<unsigned int>                m_indices;
-    std::vector<value_type>                  m_interleavedVertices;
+    std::vector<vec_type>     m_vertices;
+    std::vector<unsigned int> m_indices;
+    std::vector<value_type>   m_interleavedVertices;
 
     std::optional<std::vector<unsigned int>> m_indices_custom_render{ std::nullopt };
     std::optional<std::vector<unsigned int>> m_indices_custom_edit{ std::nullopt };

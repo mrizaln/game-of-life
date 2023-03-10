@@ -1,56 +1,49 @@
 #include <string>
-#include <chrono>
 #include <sstream>
+#include <iostream>
 
 #include "./game.hpp"
 #include "./render.hpp"
 
-
 int main(int argc, char** argv)
 {
     // help
-    if (argc > 1)
-    {
+    if (argc > 1) {
         std::string arg{ argv[1] };
-        if (arg == "-h")
-        {
+        if (arg == "-h") {
             std::cout << "Usage: <delay> <startDensity> <length/width>\n";
             return 0;
         }
     }
 
     float delay{ 0.001 };
-    if (argc > 1)
-    {
-        std::string arg{ argv[1] };
-        std::stringstream ss { arg };
+    if (argc > 1) {
+        std::string       arg{ argv[1] };
+        std::stringstream ss{ arg };
         ss >> delay;
     }
 
     float density{ 0.3 };
-    if (argc > 2)
-    {
-        std::string arg{ argv[2] };
-        std::stringstream ss { arg };
+    if (argc > 2) {
+        std::string       arg{ argv[2] };
+        std::stringstream ss{ arg };
         ss >> density;
     }
 
     int length{ 50 }, width{ 20 };
-    if (argc > 3)
-    {
-        char tmp{};
-        std::string arg{ argv[3] };
-        std::stringstream ss { arg };
+    if (argc > 3) {
+        char              tmp{};
+        std::string       arg{ argv[3] };
+        std::stringstream ss{ arg };
         ss >> length;
         ss >> tmp;
         ss >> width;
     }
 
     bool pause{ false };
-    if (argc > 4)
-    {
-        std::string arg{ argv[4] };
-        std::stringstream ss { arg };
+    if (argc > 4) {
+        std::string       arg{ argv[4] };
+        std::stringstream ss{ arg };
         ss >> pause;
     }
 
@@ -75,8 +68,7 @@ int main(int argc, char** argv)
     RenderEngine::simulation::pause = pause;
 
     RenderEngine::initialize(grid, delay);
-    while (!RenderEngine::shouldClose())
-    {
+    while (!RenderEngine::shouldClose()) {
         RenderEngine::render();
     }
     RenderEngine::reset();

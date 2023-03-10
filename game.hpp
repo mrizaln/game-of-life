@@ -1,19 +1,18 @@
-#include <algorithm>
-#include <ctime>
-#include <functional>
+#ifndef GAME_H
+#define GAME_H
+
+#include <algorithm>    // std::for_each
+#include <ctime>        // std::time
+#include <execution>    // std::execution
 #include <iostream>
 #include <limits>
 #include <random>
 #include <stdexcept>
 #include <thread>
-#include <utility>    // for std::pair
+#include <utility>    // std::pair
 #include <vector>
-#include <execution>
 
 #include <perlin_noise/PerlinNoise.hpp>
-
-#ifndef GAME_H
-#define GAME_H
 
 class Cell
 {

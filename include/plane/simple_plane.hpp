@@ -1,15 +1,14 @@
-#ifndef SIMPLE_PLANE_H
-#define SIMPLE_PLANE_H
+#ifndef SIMPLE_PLANE_HPP
+#define SIMPLE_PLANE_HPP
 
 #include <cstddef>
+#include <iostream>
 
 #include <glad/glad.h>
 
-#include <iostream>
-
-
 class SimplePlane
 {
+    // clang-format off
     static inline float s_planeVertices[]{
         -0.5f, -0.5f, 0.0f,
          0.5f, -0.5f, 0.0f,
@@ -35,6 +34,7 @@ class SimplePlane
         0, 1, 2,
         0, 2, 3,
     };
+    // clang-format on
 
     // vertices data
     float m_vertices[12]{};
@@ -43,7 +43,7 @@ class SimplePlane
 
     // interleaved vertices data
     float m_interleavedVertices[32]{};
-    int m_interleavedVerticesStrideSize{};
+    int   m_interleavedVerticesStrideSize{};
 
     // buffers
     unsigned int VAO;
@@ -52,11 +52,12 @@ class SimplePlane
 
 public:
     SimplePlane(float sideLength = 1.0f)
-        : m_interleavedVerticesStrideSize{ 8*sizeof(float) }
+        : m_interleavedVerticesStrideSize{ 8 * sizeof(float) }
     {
         // copy vertices multiplied by sidelength
-        for (std::size_t i{ 0 }; i < std::size(m_vertices); i++)
+        for (std::size_t i{ 0 }; i < std::size(m_vertices); i++) {
             m_vertices[i] = s_planeVertices[i] * sideLength;
+        }
         // std::copy(std::begin(s_planeVertices), std::end(s_planeVertices), std::begin(m_vertices));
         // std::for_each(std::begin(m_vertices), std::end(m_vertices), [sideLength](float& a){ a *= sideLength; });
 
@@ -97,10 +98,10 @@ public:
     void multiplyTexCoords(float width, float height)
     {
         // width
-        m_texCoords[2] *= width;    // x of bottom-right
-        m_texCoords[4] *= width;    // x of top-right
-        m_texCoords[5] *= height;   // y of top-right
-        m_texCoords[7] *= height;   // y of top-left
+        m_texCoords[2] *= width;     // x of bottom-right
+        m_texCoords[4] *= width;     // x of top-right
+        m_texCoords[5] *= height;    // y of top-right
+        m_texCoords[7] *= height;    // y of top-left
 
         buildInterleavedVertices();
         deleteBuffers();
@@ -110,31 +111,28 @@ public:
     void print() const
     {
         auto& v{ m_interleavedVertices };
-        for (std::size_t i{ 0 }; i < std::size(m_interleavedVertices); i += 8)
-        {
+        for (std::size_t i{ 0 }; i < std::size(m_interleavedVertices); i += 8) {
             std::cout.precision(2);
-            std::cout << v[i  ] << '\t' << v[i+1] << '\t' << v[i+2] << "\t\t"
-                      << v[i+3] << '\t' << v[i+4] << '\t' << v[i+5] << "\t\t"
-                      << v[i+6] << '\t' << v[i+7] << '\n';
+            std::cout << v[i] << '\t' << v[i + 1] << '\t' << v[i + 2] << "\t\t"
+                      << v[i + 3] << '\t' << v[i + 4] << '\t' << v[i + 5] << "\t\t"
+                      << v[i + 6] << '\t' << v[i + 7] << '\n';
         }
     }
-
 
 private:
     void buildInterleavedVertices()
     {
-        for (std::size_t i{ 0 }, j{ 0 }, k{ 0 }, l{ 0 }; i < std::size(m_interleavedVertices); i += 8, j += 3, k += 3, l += 2)
-        {
-            m_interleavedVertices[i]   = m_vertices[j];
-            m_interleavedVertices[i+1] = m_vertices[j+1];
-            m_interleavedVertices[i+2] = m_vertices[j+2];
+        for (std::size_t i{ 0 }, j{ 0 }, k{ 0 }, l{ 0 }; i < std::size(m_interleavedVertices); i += 8, j += 3, k += 3, l += 2) {
+            m_interleavedVertices[i]     = m_vertices[j];
+            m_interleavedVertices[i + 1] = m_vertices[j + 1];
+            m_interleavedVertices[i + 2] = m_vertices[j + 2];
 
-            m_interleavedVertices[i+3] = m_normals[k];
-            m_interleavedVertices[i+4] = m_normals[k+1];
-            m_interleavedVertices[i+5] = m_normals[k+2];
+            m_interleavedVertices[i + 3] = m_normals[k];
+            m_interleavedVertices[i + 4] = m_normals[k + 1];
+            m_interleavedVertices[i + 5] = m_normals[k + 2];
 
-            m_interleavedVertices[i+6] = m_texCoords[l];
-            m_interleavedVertices[i+7] = m_texCoords[l+1];
+            m_interleavedVertices[i + 6] = m_texCoords[l];
+            m_interleavedVertices[i + 7] = m_texCoords[l + 1];
         }
 
         // this->print();
@@ -146,7 +144,7 @@ private:
         glGenBuffers(1, &VBO);
         glGenBuffers(1, &EBO);
 
-        //bind
+        // bind
         //----
         glBindVertexArray(VAO);
 
@@ -164,11 +162,11 @@ private:
 
         // normal
         glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, m_interleavedVerticesStrideSize, (void*)(3*sizeof(float)));
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, m_interleavedVerticesStrideSize, (void*)(3 * sizeof(float)));
 
         // texcoords
         glEnableVertexAttribArray(2);
-        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, m_interleavedVerticesStrideSize, (void*)(6*sizeof(float)));
+        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, m_interleavedVerticesStrideSize, (void*)(6 * sizeof(float)));
 
         // unbind
         //----

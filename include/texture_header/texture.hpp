@@ -1,23 +1,19 @@
-#ifndef TEXTURE_H
-#define TEXTURE_H
+#ifndef TEXTURE_HPP
+#define TEXTURE_HPP
+
+#include <cstddef>    // std::size_t
+#include <iostream>
+#include <limits>    // std::numeric_limits
+#include <unordered_map>
 
 #include <glad/glad.h>    // include glad to get all the required OpenGL headers
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb/stb_image.h>
 
-#include <cstddef>
-#include <iostream>
-#include <limits>
-#include <unordered_map>
-
 class Texture
 {
 private:
     static inline unsigned int s_textureUnitCount{ 0 };
-
-    int imageWidth{};
-    int imageHeight{};
-    int nrChannels{};
 
     unsigned char* imageData{};
 
@@ -37,6 +33,10 @@ public:
 
     unsigned int textureUnitNum{ maxUnitNum };    // means no texture loaded
     unsigned int textureID;                       // don't change this value outside of Texture class
+
+    int imageWidth{};
+    int imageHeight{};
+    int nrChannels{};
 
     Texture(const Texture&) = default;
 
@@ -114,8 +114,9 @@ public:
     void updateTexture(void* data, int width, int height, int numChannels = 3, GLenum dataType = GL_UNSIGNED_BYTE)
     {
         glBindTexture(GL_TEXTURE_2D, textureID);
-        glTexImage2D(GL_TEXTURE_2D, 0, numChannelsToGLenum[numChannels], width, height, 0, numChannelsToGLenum[numChannels], dataType, data);
-        glGenerateMipmap(GL_TEXTURE_2D);
+        // glTexImage2DGL_TEXTURE_2D, 0, numChannelsToGLenum[numChannels], width, height, 0, numChannelsToGLenum[numChannels], dataType, data);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, numChannelsToGLenum[numChannels], dataType, data);
+        // glGenerateMipmap(GL_TEXTURE_2D);
     }
 
     void updateMagFilter(GLenum magFilter)

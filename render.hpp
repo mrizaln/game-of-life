@@ -1,21 +1,21 @@
-#ifndef RENDER_H
-#define RENDER_H
+#ifndef RENDER_HPP
+#define RENDER_HPP
 
 // #define DEBUG
 
-#include <algorithm>    // for std::min
+#include <algorithm>    // std::min, std::max
 #include <atomic>
-#include <cmath>
+#include <cmath>    // std::*math_functions*
 #include <cstddef>
 #include <exception>
 #include <iostream>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <stdexcept>
 #include <string>
-#include <vector>
-#include <mutex>
 #include <thread>
+#include <vector>
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -522,7 +522,7 @@ namespace RenderEngine
                 2.0f * configuration::width / float(maxCol)    // show only number of maxCol
             }) };
             auto  n{ -std::log(Z / z) / std::log(1.1f) };
-            camera::camera->speed = 100.0f * std::pow(1.1f, n/2);
+            camera::camera->speed = 100.0f * std::pow(1.1f, n / 2);
         }
 
         // cycle through the grid modes

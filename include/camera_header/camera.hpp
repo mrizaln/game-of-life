@@ -1,10 +1,9 @@
-#ifndef CAMERA_H
-#define CAMERA_H
+#ifndef CAMERA_HPP
+#define CAMERA_HPP
 
 #include <glad/glad.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-
 
 class Camera
 {
@@ -32,18 +31,18 @@ public:
     static inline const float s_SENSITIVITY{ 0.1f };
     static inline const float s_FOV{ 45.0f };
     static inline const float s_ZOOM{ 1.0f };
-    
+
     // euler angles
-    float pitch;            // in degrees
-    float yaw;              // in degrees
+    float pitch;    // in degrees
+    float yaw;      // in degrees
 
     // camera vectors
     glm::vec3 position;
     glm::vec3 up;
     glm::vec3 right;
     glm::vec3 front;
-    glm::vec3 worldUp;              // used for up and down movement
-    glm::vec3 horizontalFront;      // used for forth and back movement
+    glm::vec3 worldUp;            // used for up and down movement
+    glm::vec3 horizontalFront;    // used for forth and back movement
 
     // camera attributes
     float fov;
@@ -53,11 +52,10 @@ public:
 
     // constructor with vectors
     Camera(
-        glm::vec3 position = {0.0f, 0.0f, 3.0f},
-        glm::vec3 worldUp = {0.0f, 1.0f, 0.0f},
-        float pitch = s_PITCH,
-        float yaw = s_YAW
-    )
+        glm::vec3 position = { 0.0f, 0.0f, 3.0f },
+        glm::vec3 worldUp  = { 0.0f, 1.0f, 0.0f },
+        float     pitch    = s_PITCH,
+        float     yaw      = s_YAW)
         : front{ glm::vec3(0.0f, 0.0f, -1.0f) }
         , speed{ s_SPEED }
         , sensitivity{ s_SENSITIVITY }
@@ -65,9 +63,9 @@ public:
         , zoom{ s_ZOOM }
     {
         this->position = position;
-        this->worldUp = worldUp;
-        this->pitch = pitch;
-        this->yaw = yaw;
+        this->worldUp  = worldUp;
+        this->pitch    = pitch;
+        this->yaw      = yaw;
 
         updateCameraVector();
     }
@@ -75,9 +73,9 @@ public:
     // constructor with scalar
     Camera(float posX, float posY, float posZ, float upX, float upY, float upZ, float yaw, float pitch)
     {
-        position = glm::vec3(posX, posY, posZ);
-        worldUp = glm::vec3(upX, upY, upZ);
-        this->yaw = yaw;
+        position    = glm::vec3(posX, posY, posZ);
+        worldUp     = glm::vec3(upX, upY, upZ);
+        this->yaw   = yaw;
         this->pitch = pitch;
 
         updateCameraVector();
@@ -93,8 +91,7 @@ public:
     // process camera movement
     void moveCamera(CameraMovement movement, float deltaTime)
     {
-        switch (movement)
-        {
+        switch (movement) {
         case CameraMovement::FORWARD:
             // position += front * speed * deltaTime;
             position += horizontalFront * speed * deltaTime;
@@ -131,27 +128,38 @@ public:
         pitch += yOffset;
         yaw += xOffset;
 
-        if (pitch >  89.0f) pitch =  89.0f;
-        if (pitch < -89.0f) pitch = -89.0f;
+        if (pitch > 89.0f) {
+            pitch = 89.0f;
+        }
+        if (pitch < -89.0f) {
+            pitch = -89.0f;
+        }
 
-        if (yaw > 360.0f) yaw = fmod(yaw, 360.0f);
-        if (yaw <   0.0f) yaw = fmod(yaw, 360.0f) - 360.0f;
+        if (yaw > 360.0f) {
+            yaw = fmod(yaw, 360.0f);
+        }
+        if (yaw < 0.0f) {
+            yaw = fmod(yaw, 360.0f) - 360.0f;
+        }
 
         updateCameraVector();
     }
 
     // process zoom in and zoom out from mouse scroll
-    void processMouseScroll(float yOffset, CameraMagnification which=FOV)
+    void processMouseScroll(float yOffset, CameraMagnification which = FOV)
     {
-        switch (which)
-        {
+        switch (which) {
         case FOV:
             fov -= yOffset;
-            if (fov < 1.0f) fov = 1.0f;
-            if (fov > 179.0f) fov = 179.0f;
+            if (fov < 1.0f) {
+                fov = 1.0f;
+            }
+            if (fov > 179.0f) {
+                fov = 179.0f;
+            }
             return;
         case ZOOM:
-            zoom = (yOffset > 0 ? zoom * 1.1f : zoom / 1.1f);
+            zoom  = (yOffset > 0 ? zoom * 1.1f : zoom / 1.1f);
             speed = (yOffset > 0 ? speed / 1.1f : speed * 1.1f);
             return;
         }
@@ -160,7 +168,7 @@ public:
     // reset look, to origin
     void lookAtOrigin()
     {
-        const auto& direction{ -position };                     // direction of camera = origin - camera.position; origin at (0,0,0)
+        const auto& direction{ -position };    // direction of camera = origin - camera.position; origin at (0,0,0)
         // const auto normalizedDirection{ glm::normalize(direction) };
 
         // if (abs(normalizedDirection.x - front.x) < 0.05f &&\
@@ -168,17 +176,17 @@ public:
         //     abs(normalizedDirection.z - front.z) < 0.05f)
         //     return;
 
-        yaw = 180.0f/M_PI * atan(direction.z/direction.x);      // returns -90 to 90
+        yaw = 180.0f / M_PI * atan(direction.z / direction.x);    // returns -90 to 90
 
         // for some reason direction.x < 0 doesn't work, we need to add some error (in this case 1e-5)
-        if (direction.x < 1e-5f)        // fix direction flipped when camera front reset to origin when it already points to origin
+        if (direction.x < 1e-5f) {    // fix direction flipped when camera front reset to origin when it already points to origin
             yaw += 180.0f;
+        }
 
-        pitch = 180.0f/M_PI * atan(direction.y/sqrt(direction.x*direction.x + direction.z*direction.z));
+        pitch = 180.0f / M_PI * atan(direction.y / sqrt(direction.x * direction.x + direction.z * direction.z));
 
         updateCameraVector();
     }
-
 
 private:
     void updateCameraVector()
@@ -193,36 +201,32 @@ private:
         right = glm::normalize(glm::cross(front, worldUp));
         up    = glm::normalize(glm::cross(right, front));
 
-        horizontalFront = glm::normalize(glm::vec3(direction.x, 0, direction.z));       // horizontal front y value is zero (only in xz plane aka horizontal)
+        horizontalFront = glm::normalize(glm::vec3(direction.x, 0, direction.z));    // horizontal front y value is zero (only in xz plane aka horizontal)
     }
-
 
     // my own LookAt function implementation
     glm::mat4 getLookAtMatrix()
     {
-        glm::mat4 rotation {
+        glm::mat4 rotation{
             glm::transpose(
                 glm::mat4(
-                    glm::vec4(right,            0.0f),
-                    glm::vec4(up,               0.0f),
-                    glm::vec4(-front,           0.0f),      // front reversed because NDC is left handed (?)
-                    glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)
-                )
-            )
+                    glm::vec4(right, 0.0f),
+                    glm::vec4(up, 0.0f),
+                    glm::vec4(-front, 0.0f),    // front reversed because NDC is left handed (?)
+                    glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)))
         };
 
-        glm::mat4 translation {
+        glm::mat4 translation{
             glm::vec4(1.0f, 0.0f, 0.0f, 0.0f),
             glm::vec4(0.0f, 1.0f, 0.0f, 0.0f),
             glm::vec4(0.0f, 0.0f, 1.0f, 0.0f),
-            glm::vec4(-position,        1.0f)
+            glm::vec4(-position, 1.0f)
         };
 
-        auto lookAt { rotation * translation };
+        auto lookAt{ rotation * translation };
 
         return lookAt;
     }
 };
-
 
 #endif
