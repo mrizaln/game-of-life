@@ -1,5 +1,4 @@
 #include <string>
-#include <thread>
 #include <chrono>
 #include <sstream>
 
@@ -47,8 +46,18 @@ int main(int argc, char** argv)
         ss >> width;
     }
 
+    bool pause{ false };
+    if (argc > 4)
+    {
+        std::string arg{ argv[4] };
+        std::stringstream ss { arg };
+        ss >> pause;
+    }
+
+    std::cout << "Creating and populating grid...\n";
     Grid grid{ length, width };
     grid.populate(density);
+    std::cout << "Done\n";
 
     // std::cout << "\033[H";          // go to 0,0
     // std::cout << "\033[0J";         // clear all
@@ -63,9 +72,12 @@ int main(int argc, char** argv)
     //     std::this_thread::sleep_for(1s * delay);
     // }
 
+    RenderEngine::simulation::pause = pause;
+
     RenderEngine::initialize(grid, delay);
     while (!RenderEngine::shouldClose())
     {
         RenderEngine::render();
     }
+    RenderEngine::reset();
 }
