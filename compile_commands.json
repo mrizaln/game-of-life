@@ -1,12 +1,20 @@
 [
 {
-  "directory": "/home/mrizaln/Projects/C++/Game of Life/build/linux-release",
-  "command": "/usr/bin/c++  -I\"/home/mrizaln/Projects/C++/Game of Life/include\" -I\"/home/mrizaln/Projects/C++/Game of Life/include/glad/include/glad\" -O3 -DNDEBUG -std=gnu++20 -o CMakeFiles/main.dir/main.cpp.o -c \"/home/mrizaln/Projects/C++/Game of Life/main.cpp\"",
-  "file": "/home/mrizaln/Projects/C++/Game of Life/main.cpp"
+  "directory": "/home/mrizaln/Projects/C++/game-of-life/build/linux-release",
+  "command": "/usr/lib64/ccache/c++  -I/home/mrizaln/Projects/C++/game-of-life/include -I/home/mrizaln/Projects/C++/game-of-life/util -I/home/mrizaln/Projects/C++/game-of-life/include/glad/include -O3 -DNDEBUG -std=gnu++20 -pg -o CMakeFiles/main.dir/main.cpp.o -c /home/mrizaln/Projects/C++/game-of-life/main.cpp",
+  "file": "/home/mrizaln/Projects/C++/game-of-life/main.cpp",
+  "output": "CMakeFiles/main.dir/main.cpp.o"
 },
 {
-  "directory": "/home/mrizaln/Projects/C++/Game of Life/build/linux-release/include/glad",
-  "command": "/usr/bin/cc  -I\"/home/mrizaln/Projects/C++/Game of Life/include/glad/include/glad\" -O3 -DNDEBUG -o CMakeFiles/glad.dir/glad.c.o -c \"/home/mrizaln/Projects/C++/Game of Life/include/glad/glad.c\"",
-  "file": "/home/mrizaln/Projects/C++/Game of Life/include/glad/glad.c"
+  "directory": "/home/mrizaln/Projects/C++/game-of-life/build/linux-release",
+  "command": "/usr/lib64/ccache/c++  -I/home/mrizaln/Projects/C++/game-of-life/include -I/home/mrizaln/Projects/C++/game-of-life/include/glad/include -O3 -DNDEBUG -std=gnu++20 -pg -o CMakeFiles/test.dir/test.cpp.o -c /home/mrizaln/Projects/C++/game-of-life/test.cpp",
+  "file": "/home/mrizaln/Projects/C++/game-of-life/test.cpp",
+  "output": "CMakeFiles/test.dir/test.cpp.o"
+},
+{
+  "directory": "/home/mrizaln/Projects/C++/game-of-life/build/linux-release/include/glad",
+  "command": "/usr/lib64/ccache/cc  -I/home/mrizaln/Projects/C++/game-of-life/include/glad/include -O3 -DNDEBUG -pg -o CMakeFiles/glad.dir/src/glad.c.o -c /home/mrizaln/Projects/C++/game-of-life/include/glad/src/glad.c",
+  "file": "/home/mrizaln/Projects/C++/game-of-life/include/glad/src/glad.c",
+  "output": "include/glad/CMakeFiles/glad.dir/src/glad.c.o"
 }
 ]
