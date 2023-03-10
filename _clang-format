@@ -1,0 +1,38 @@
+BasedOnStyle: WebKit
+AlignConsecutiveAssignments: true
+AlignConsecutiveDeclarations:
+    Enabled: true
+    PadOperators: true
+AlignConsecutiveMacros:
+    Enabled: true
+    AcrossComments: true
+    PadOperators: true
+AlignOperands: Align
+AlignTrailingComments: true
+AllowShortIfStatementsOnASingleLine: AllIfsAndElse
+BraceWrapping:
+    AfterCaseLabel: false
+    AfterClass: true
+    AfterControlStatement: Never
+    AfterEnum: true
+    AfterFunction: true
+    AfterNamespace: true
+    AfterObjCDeclaration: false
+    AfterStruct: true
+    AfterUnion: true
+    AfterExternBlock: false
+    BeforeCatch: false
+    BeforeElse: false
+    BeforeLambdaBody: false
+    BeforeWhile: false
+    IndentBraces: false
+    SplitEmptyFunction: true
+    SplitEmptyRecord: true
+    SplitEmptyNamespace: true
+BreakBeforeBraces: Custom
+InsertBraces: true
+SortIncludes: Never
+NamespaceIndentation: All
+SpaceBeforeCpp11BracedList: false
+SpacesBeforeTrailingComments: 4
+TabWidth: 4
