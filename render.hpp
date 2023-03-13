@@ -30,7 +30,7 @@
 
 namespace RenderEngine
 {
-    GLFWwindow* initializeWindow(const std::string&);
+    GLFWwindow* initializeWindow(const std::string&, bool);
     void        reset();
 
     void framebuffer_size_callback(GLFWwindow*, int, int);
@@ -150,9 +150,9 @@ namespace RenderEngine
 
     //=================================================================================================
 
-    int initialize(Grid& grid, float delay = 1e-5f)
+    int initialize(Grid& grid, float delay = 1e-5f, bool vsync = true)
     {
-        data::window = initializeWindow("Game of Life");
+        data::window = initializeWindow("Game of Life", vsync);
         if (!data::window) {
             std::cout << "There's an error when creating window.\n";
             glfwTerminate();
@@ -352,7 +352,7 @@ namespace RenderEngine
 
     //=================================================================================================
 
-    GLFWwindow* initializeWindow(const std::string& windowName)
+    GLFWwindow* initializeWindow(const std::string& windowName, bool vsync)
     {
         // initialize glfw
         glfwInit();
@@ -387,7 +387,9 @@ namespace RenderEngine
         glEnable(GL_BLEND);
 
         // turn off vsync
-        // glfwSwapInterval(0);
+        if (!vsync) {
+            glfwSwapInterval(0);
+        }
 
         return window;
     }

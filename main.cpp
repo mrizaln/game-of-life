@@ -18,23 +18,20 @@ int main(int argc, char** argv)
 
     float delay{ 0.001 };
     if (argc > 1) {
-        std::string       arg{ argv[1] };
-        std::stringstream ss{ arg };
+        std::stringstream ss{ std::string{ argv[1] } };
         ss >> delay;
     }
 
     float density{ 0.3 };
     if (argc > 2) {
-        std::string       arg{ argv[2] };
-        std::stringstream ss{ arg };
+        std::stringstream ss{ std::string{ argv[2] } };
         ss >> density;
     }
 
     int length{ 50 }, width{ 20 };
     if (argc > 3) {
         char              tmp{};
-        std::string       arg{ argv[3] };
-        std::stringstream ss{ arg };
+        std::stringstream ss{ std::string{ argv[3] } };
         ss >> length;
         ss >> tmp;
         ss >> width;
@@ -42,9 +39,14 @@ int main(int argc, char** argv)
 
     bool pause{ false };
     if (argc > 4) {
-        std::string       arg{ argv[4] };
-        std::stringstream ss{ arg };
+        std::stringstream ss{ std::string{ argv[4] } };
         ss >> pause;
+    }
+
+    bool vsync{ true };
+    if (argc > 5) {
+        std::stringstream ss{ std::string{ argv[4] } };
+        ss >> vsync;
     }
 
     std::cout << "Creating and populating grid... ";
@@ -67,7 +69,7 @@ int main(int argc, char** argv)
 
     RenderEngine::simulation::pause = pause;
 
-    RenderEngine::initialize(grid, delay);
+    RenderEngine::initialize(grid, delay, vsync);
     while (!RenderEngine::shouldClose()) {
         RenderEngine::render();
     }
