@@ -48,10 +48,6 @@ private:
     Coord_type m_length{};    // X
     Grid_type  m_grid{};      // states
 
-    // threading
-    static constexpr int     MAX_NUM_OF_THREAD{ 64 };
-    std::vector<std::thread> threadPool{};
-
     static int getRandomNumber(int min, int max)
     {
         static std::mt19937 mt{ static_cast<std::mt19937::result_type>(std::time(nullptr)) };
@@ -120,50 +116,26 @@ public:
     Grid& updateState()
     {
         for (Coord_type i{ 0 }; i < m_length; ++i) {
-            if (threadPool.size() >= MAX_NUM_OF_THREAD) {
-                for (auto& thread : threadPool) {
-                    if (!thread.joinable()) {
-                        std::cout << "stuck\n";
-                    }
-                    thread.join();
-                }
-                threadPool.clear();
-            }
+            for (Coord_type j{ 0 }; j < m_width; ++j) {
+                auto& cell{ (*this)(i, j) };
 
-            auto i_cur{ i };
-            threadPool.emplace_back([&](int i_cur) {
-                for (Coord_type j{ 0 }; j < m_width; ++j) {
-                    auto& cell{ (*this)(i_cur, j) };
+                auto numberOfNeighbor{ checkNeighbors(i, j) };
 
-                    auto numberOfNeighbor{ checkNeighbors(i_cur, j) };
-
-                    if (cell.isLive()) {
-                        if (numberOfNeighbor < 2) {
-                            cell.setDead();
-                        } else if (numberOfNeighbor <= 3) {
-                            cell.setLive();
-                        } else {
-                            cell.setDead();
-                        }
-                    } else if (numberOfNeighbor == 3) {
+                if (cell.isLive()) {
+                    if (numberOfNeighbor < 2) {
+                        cell.setDead();
+                    } else if (numberOfNeighbor <= 3) {
                         cell.setLive();
+                    } else {
+                        cell.setDead();
                     }
+                } else if (numberOfNeighbor == 3) {
+                    cell.setLive();
                 }
-            },
-                i);
+            }
         }
 
-        for (auto& thread : threadPool) {
-            thread.join();
-        }
-        threadPool.clear();
-
-        // for (auto& row : m_grid) {
-        //     for (auto& cell : row) {
-        //         cell.update();
-        //     }
-        // }
-
+        // update
         std::for_each(std::execution::par_unseq, m_grid.begin(), m_grid.end(), [&](std::vector<Cell>& row) {
             std::for_each(std::execution::par_unseq, row.begin(), row.end(), [&](Cell& cell) { cell.update(); });
         });
