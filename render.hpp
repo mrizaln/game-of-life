@@ -656,6 +656,11 @@ namespace RenderEngine
         // x = x + xOffset;
         // y = data::gridPtr->getWidth() - y - yOffset;
 
+        if (mouse::captureMouse) {
+            x = camera::camera->position.x;
+            y = camera::camera->position.y;
+        }
+
         // last pos
         int x_last{ static_cast<int>(camera::camera->position.x - (xDelta - 2.0f * xPos_last / camera::camera->zoom) + xOffset) };    // last col
         int y_last{ static_cast<int>(camera::camera->position.x - (yDelta - 2.0f * yPos_last / camera::camera->zoom) + yOffset) };    // last row
