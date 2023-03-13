@@ -1,4 +1,5 @@
 BasedOnStyle: WebKit
+AlignAfterOpenBracket: BlockIndent
 AlignConsecutiveAssignments: true
 AlignConsecutiveDeclarations:
     Enabled: true

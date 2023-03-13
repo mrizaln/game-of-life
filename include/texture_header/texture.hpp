@@ -44,7 +44,8 @@ public:
     Texture(
         const unsigned char red   = 0x0,
         const unsigned char green = 0x0,
-        const unsigned char blue  = 0x0)
+        const unsigned char blue  = 0x0
+    )
     {
         textureUnitNum = s_textureUnitCount++;
 
@@ -72,7 +73,8 @@ public:
         int            channels  = 3,
         int            minFilter = GL_LINEAR,
         int            magFilter = GL_NEAREST,
-        int            wrap      = GL_REPEAT)
+        int            wrap      = GL_REPEAT
+    )
         : imageData{ colorData }
         , imageWidth{ width }
         , imageHeight{ height }
@@ -93,7 +95,8 @@ public:
         int         minFilter      = GL_LINEAR,
         int         magFilter      = GL_NEAREST,
         int         wrap           = GL_REPEAT,
-        bool        flipVertically = true)
+        bool        flipVertically = true
+    )
     {
         textureUnitNum = s_textureUnitCount++;
 

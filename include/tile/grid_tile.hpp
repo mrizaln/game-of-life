@@ -22,8 +22,8 @@
 class GridTile
 {
 private:
-    Plane<float>           m_plane;
-    Texture                m_texture{ 0xff, 0xff, 0xff };
+    Plane<float> m_plane;
+    Texture      m_texture{ 0xff, 0xff, 0xff };
 
 public:
     glm::vec3 m_position{ 0.0f, 0.0f, 0.0f };
@@ -56,7 +56,8 @@ public:
         int              wrapFilter   = GL_REPEAT,
         const glm::vec3& position     = { 0.0f, 0.0f, 0.0f },
         const glm::vec3& color        = { 1.0f, 1.0f, 1.0f },
-        const glm::vec3& scale        = { 1.0f, 1.0f, 1.0f })
+        const glm::vec3& scale        = { 1.0f, 1.0f, 1.0f }
+    )
         : m_plane{ length, width, true }
         , m_shader{ vShaderDir, fShaderDir }
         , m_texture{ textureDir, texMagFilter, texMinFilter, wrapFilter }

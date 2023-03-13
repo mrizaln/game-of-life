@@ -25,7 +25,8 @@ public:
         int  xSides          = 1,
         int  ySides          = 1,
         bool adjustTexture   = false,
-        bool generateBuffers = true)
+        bool generateBuffers = true
+    )
         : m_subdivideX{ xSides }
         , m_subdivideY{ ySides }
     {

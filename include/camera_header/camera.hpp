@@ -55,7 +55,8 @@ public:
         glm::vec3 position = { 0.0f, 0.0f, 3.0f },
         glm::vec3 worldUp  = { 0.0f, 1.0f, 0.0f },
         float     pitch    = s_PITCH,
-        float     yaw      = s_YAW)
+        float     yaw      = s_YAW
+    )
         : front{ glm::vec3(0.0f, 0.0f, -1.0f) }
         , speed{ s_SPEED }
         , sensitivity{ s_SENSITIVITY }
@@ -213,7 +214,9 @@ private:
                     glm::vec4(right, 0.0f),
                     glm::vec4(up, 0.0f),
                     glm::vec4(-front, 0.0f),    // front reversed because NDC is left handed (?)
-                    glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)))
+                    glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)
+                )
+            )
         };
 
         glm::mat4 translation{

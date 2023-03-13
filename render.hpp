@@ -163,8 +163,12 @@ namespace RenderEngine
 
         data::gridBorderTile = new Tile{
             1.0f,
-            "./resources/shaders/shader.vs", "./resources/shaders/shader.fs",                 // Shader
-            "./resources/textures/grid.png", GL_LINEAR, GL_LINEAR, GL_REPEAT,                 // Texture
+            "./resources/shaders/shader.vs",
+            "./resources/shaders/shader.fs",
+            "./resources/textures/grid.png",
+            GL_LINEAR,
+            GL_LINEAR,
+            GL_REPEAT,
             { data::gridPtr->getLength() / 2.0f, data::gridPtr->getWidth() / 2.0f, 0.0f },    // pos
             { 1.0f, 1.0f, 1.0f },                                                             // color
             { data::gridPtr->getLength(), data::gridPtr->getWidth(), 0.0f }                   // scale
@@ -172,15 +176,19 @@ namespace RenderEngine
 
         data::gridBorderTile->getPlane().multiplyTexCoords(data::gridPtr->getLength(), data::gridPtr->getWidth());
 
-        data::gridTile = new GridTile(
+        data::gridTile = new GridTile{
             data::gridPtr->getLength(),
             data::gridPtr->getWidth(),
-            "./resources/shaders/gridShader.vert", "./resources/shaders/gridShader.frag",
-            "./resources/textures/cell.png", GL_LINEAR, GL_LINEAR, GL_REPEAT,
+            "./resources/shaders/gridShader.vert",
+            "./resources/shaders/gridShader.frag",
+            "./resources/textures/cell.png",
+            GL_LINEAR,
+            GL_LINEAR,
+            GL_REPEAT,
             { data::gridPtr->getLength() / 2.0f, data::gridPtr->getWidth() / 2.0f, 0.0f },    // pos
             { 1.0f, 1.0f, 1.0f },                                                             // color
             { data::gridPtr->getLength(), data::gridPtr->getWidth(), 0.0f }                   // scale
-        );
+        };
 
         camera::camera        = new Camera{};
         camera::camera->speed = 100.0f;    // 10 tiles per movement
@@ -615,7 +623,7 @@ namespace RenderEngine
                 }
                 done = true;
             },
-                xStart, xEnd, yStart, yEnd);
+                                 xStart, xEnd, yStart, yEnd);
         } else {
             if (done || block) {
                 blockHere();

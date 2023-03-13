@@ -163,16 +163,20 @@ public:
          */
 
         return (
-            checkState(x - 1, y - 1) + checkState(x, y - 1) + checkState(x + 1, y - 1)
-            + checkState(x - 1, y) + checkState(x + 1, y)
-            + checkState(x - 1, y + 1) + checkState(x, y + 1) + checkState(x + 1, y + 1));
+            // clang-format off
+              checkState(x - 1, y - 1) + checkState(x, y - 1) + checkState(x + 1, y - 1)
+            + checkState(x - 1, y    )                        + checkState(x + 1, y    )
+            + checkState(x - 1, y + 1) + checkState(x, y + 1) + checkState(x + 1, y + 1)
+            // clang-format on
+        );
     }
 
     constexpr bool isInBound(const Coord_type xPos, const Coord_type yPos) const
     {
         return (
             (xPos >= 0 && xPos < m_length)
-            && (yPos >= 0 && yPos < m_width));
+            && (yPos >= 0 && yPos < m_width)
+        );
     }
 
     constexpr bool checkState(const Coord_type xPos, const Coord_type yPos) const
