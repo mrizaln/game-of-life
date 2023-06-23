@@ -1,6 +1,7 @@
 #ifndef GAME_HPP
 #define GAME_HPP
 
+#include "util/timer.hpp"
 #include <algorithm>    // std::for_each
 #include <ctime>        // std::time
 #include <execution>    // std::execution
@@ -81,8 +82,8 @@ public:
     }
 
     Grid(const Coord_type length, const Coord_type width)
-        : m_length{ length }
-        , m_width{ width }
+        : m_width{ width }
+        , m_length{ length }
         , m_grid{ std::vector<std::vector<Cell>>(width, std::vector<Cell>(length)) }
     {
     }
@@ -93,8 +94,6 @@ public:
     {
         // for (auto& row : m_grid) {
         for (Coord_type i{ 0 }; i < m_length; ++i) {
-            auto& row{ m_grid[i] };
-            // for (auto& cell : row) {
             for (Coord_type j{ 0 }; j < m_width; ++j) {
                 auto& cell{ (*this)(i, j) };
                 // if (getRandomBool(density)) {
@@ -106,15 +105,16 @@ public:
             }
         }
 
-        for (auto& row : m_grid) {
-            for (auto& cell : row) {
-                cell.update();
-            }
-        }
+        // update
+        std::for_each(std::execution::par_unseq, m_grid.begin(), m_grid.end(), [&](std::vector<Cell>& row) {
+            std::for_each(std::execution::par_unseq, row.begin(), row.end(), [&](Cell& cell) { cell.update(); });
+        });
     }
 
     Grid& updateState()
     {
+        util::Timer timer{ "updateState" };
+
         for (Coord_type i{ 0 }; i < m_length; ++i) {
             for (Coord_type j{ 0 }; j < m_width; ++j) {
                 auto& cell{ (*this)(i, j) };

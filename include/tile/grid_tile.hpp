@@ -17,8 +17,6 @@
 #include <texture_header/texture.hpp>
 #include <plane/plane.hpp>
 
-#include <timer/timer.h>
-
 class GridTile
 {
 private:
@@ -59,11 +57,11 @@ public:
         const glm::vec3& scale        = { 1.0f, 1.0f, 1.0f }
     )
         : m_plane{ length, width, true }
-        , m_shader{ vShaderDir, fShaderDir }
         , m_texture{ textureDir, texMagFilter, texMinFilter, wrapFilter }
         , m_position{ position }
-        , m_color{ color }
         , m_scale{ scale }
+        , m_color{ color }
+        , m_shader{ vShaderDir, fShaderDir }
     {
         m_shader.use();
         m_shader.setInt("uTex", m_texture.textureUnitNum);    // texture

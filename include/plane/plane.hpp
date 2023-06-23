@@ -1,6 +1,7 @@
 #ifndef PLANE_HPP
 #define PLANE_HPP
 
+#include "util/timer.hpp"
 #include <algorithm>    // std::generate
 #include <array>
 #include <cstddef>    // std::size_t
@@ -46,19 +47,19 @@ public:
 
     ~Plane() = default;
 
+    // thread safe draw
     void draw(bool shouldSwap = false)
     {
         std::size_t indicesSize{ m_indices_custom_render->size() };
         if (m_indices_custom_edit.has_value()) {
-            m_mt.lock();
+            std::lock_guard lock{ m_mt };
+
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
             glBufferData(GL_ELEMENT_ARRAY_BUFFER, m_indices_custom_edit->size() * sizeof(m_indices_custom_edit->front()), &m_indices_custom_edit->front(), GL_STATIC_DRAW);
 
             indicesSize             = m_indices_custom_edit->size();
             m_indices_custom_render = std::move(m_indices_custom_edit);
             m_indices_custom_edit.reset();
-
-            m_mt.unlock();
         }
 
         // m_mt.lock();
@@ -96,7 +97,8 @@ public:
     template <typename __bool_like = bool>
     void customizeIndices(const std::vector<std::vector<__bool_like>>& condition, int xStart, int xEnd, int yStart, int yEnd)
     {
-        m_mt.lock();
+        util::Timer     timer{ "customizeIndices" };
+        std::lock_guard lock{ m_mt };
 
         std::vector<unsigned int> indices;
 
@@ -126,8 +128,6 @@ public:
         m_indices_custom_edit.reset();
         m_indices_custom_edit = indices;
         // print(&m_indices_custom_edit.value());
-
-        m_mt.unlock();
     }
 
     void resetIndices()
@@ -145,7 +145,7 @@ public:
 
     void print(const std::vector<unsigned int>* indices = nullptr) const
     {
-        auto coutStateOld{ std::cout.flags() };
+        auto _cout_old_state{ std::cout.flags() };
 
         // std::cout << "\nInterleavedVertices:\n";
         // auto& v{ m_interleavedVertices };
@@ -165,39 +165,10 @@ public:
             }
         }
 
-        std::cout.flags(coutStateOld);
+        std::cout.flags(_cout_old_state);
     }
 
 private:
-    // buffers
-    unsigned int VAO;
-    unsigned int VBO;
-    unsigned int EBO;
-
-    static constexpr value_type START_FROM{ -0.5 };
-    static constexpr value_type END_TO{ 0.5 };
-
-#ifdef ENABLE_NORMAL
-    inline static std::size_t m_interleavedVerticesStrideSize{ 8 * sizeof(Value_type) };
-#else
-    inline static std::size_t m_interleavedVerticesStrideSize{ 5 * sizeof(value_type) };
-#endif
-
-    int m_subdivideX{};
-    int m_subdivideY{};
-
-    std::vector<vec_type>     m_vertices;
-    std::vector<unsigned int> m_indices;
-    std::vector<value_type>   m_interleavedVertices;
-
-    std::optional<std::vector<unsigned int>> m_indices_custom_render{ std::nullopt };
-    std::optional<std::vector<unsigned int>> m_indices_custom_edit{ std::nullopt };
-
-    value_type m_texCoordsMultiplierX{ 1.0 };
-    value_type m_texCoordsMultiplierY{ 1.0 };
-
-    mutable std::mutex m_mt;    // enable modification on const instantiation
-
     template <typename __value_type = value_type>
     struct __PointsGenerator
     {
@@ -216,6 +187,35 @@ private:
             return tmp;
         }
     };
+
+    static constexpr value_type START_FROM{ -0.5 };
+    static constexpr value_type END_TO{ 0.5 };
+
+#ifdef ENABLE_NORMAL
+    inline static std::size_t m_interleavedVerticesStrideSize{ 8 * sizeof(Value_type) };
+#else
+    inline static std::size_t m_interleavedVerticesStrideSize{ 5 * sizeof(value_type) };
+#endif
+
+    // buffers
+    unsigned int VAO;
+    unsigned int VBO;
+    unsigned int EBO;
+
+    int m_subdivideX{};
+    int m_subdivideY{};
+
+    std::vector<vec_type>     m_vertices;
+    std::vector<unsigned int> m_indices;
+    std::vector<value_type>   m_interleavedVertices;
+
+    std::optional<std::vector<unsigned int>> m_indices_custom_render{ std::nullopt };
+    std::optional<std::vector<unsigned int>> m_indices_custom_edit{ std::nullopt };
+
+    value_type m_texCoordsMultiplierX{ 1.0 };
+    value_type m_texCoordsMultiplierY{ 1.0 };
+
+    mutable std::mutex m_mt;    // mutable: enable modification on const instantiation of class
 
     void setBuffers()
     {
