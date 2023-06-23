@@ -12,7 +12,7 @@ AlignOperands: Align
 AlignTrailingComments: true
 AllowShortIfStatementsOnASingleLine: AllIfsAndElse
 BraceWrapping:
-    AfterCaseLabel: false
+    AfterCaseLabel: true
     AfterClass: true
     AfterControlStatement: Never
     AfterEnum: true
@@ -31,6 +31,7 @@ BraceWrapping:
     SplitEmptyRecord: true
     SplitEmptyNamespace: true
 BreakBeforeBraces: Custom
+BreakBeforeBinaryOperators: All
 InsertBraces: true
 SortIncludes: Never
 NamespaceIndentation: All
