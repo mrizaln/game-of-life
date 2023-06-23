@@ -2,6 +2,8 @@
 #include <sstream>
 #include <iostream>
 
+#include <util/timer.hpp>
+
 #include "./game.hpp"
 #include "./render.hpp"
 
@@ -54,22 +56,15 @@ int main(int argc, char** argv)
     grid.populate(density);
     std::cout << "Done\n";
 
-    // std::cout << "\033[H";          // go to 0,0
-    // std::cout << "\033[0J";         // clear all
-    // while(true)
-    // {
-    //     std::cout << "\033[H";      // to to 0,0
-    //     // std::cout << "\033[0J";
-    //     std::cout << grid << '\n';
-    //     grid.updateState();
-
-    //     using namespace std::chrono_literals;
-    //     std::this_thread::sleep_for(1s * delay);
-    // }
+    // enable timer print
+    util::Timer::s_doPrint = false;
 
     RenderEngine::simulation::pause = pause;
 
-    RenderEngine::initialize(grid, delay, vsync);
+    if (RenderEngine::initialize(grid, delay, vsync)) {
+        return -1;
+    }
+
     while (!RenderEngine::shouldClose()) {
         RenderEngine::render();
     }
