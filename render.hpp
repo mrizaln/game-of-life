@@ -14,7 +14,9 @@
 #include <mutex>
 #include <stdexcept>
 #include <string>
+#include <system_error>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include <glad/glad.h>
@@ -23,15 +25,38 @@
 #include <camera_header/camera.hpp>
 #include <tile/tile.hpp>
 #include <tile/grid_tile.hpp>
-
-#include <type_name/type_name.hpp>
+#include <util/type_name.hpp>
 
 #include "./game.hpp"
+#include "util/timer.hpp"
 
 namespace RenderEngine
 {
-    GLFWwindow* initializeWindow(const std::string&, bool);
-    void        reset();
+    struct Border
+    {
+        int xStart;
+        int xEnd;
+        int yStart;
+        int yEnd;
+
+        bool operator==(const Border& other) const
+        {
+            return xStart == other.xStart
+                   && xEnd == other.xEnd
+                   && yStart == other.yStart
+                   && yEnd == other.yEnd;
+        }
+        bool operator!=(const Border& other) const { return !(*this == other); }
+    };
+
+    struct __destroyGLFWwindow
+    {
+        void operator()(GLFWwindow* win) { glfwDestroyWindow(win); }
+    };
+    using smart_GLFWwindow = std::unique_ptr<GLFWwindow, __destroyGLFWwindow>;
+
+    smart_GLFWwindow initializeWindow(const std::string&, bool);
+    void             reset();
 
     void framebuffer_size_callback(GLFWwindow*, int, int);
     void cursor_position_callback(GLFWwindow*, double, double);
@@ -44,7 +69,7 @@ namespace RenderEngine
     void updateCamera();
     void processMouseButton();
     void processInput(GLFWwindow*);
-    bool updateStates(int, int, int, int);
+    bool updateStates(const Border&, const Border&);
     void updateDeltaTime();
 
     //=================================================================================================
@@ -80,7 +105,10 @@ namespace RenderEngine
 
     namespace camera
     {
-        Camera* camera{};
+        std::unique_ptr<Camera> camera{};
+
+        Border currentBorder;
+        Border prevBorder;
     }
 
     namespace simulation
@@ -101,17 +129,17 @@ namespace RenderEngine
 
     namespace data
     {
-        Grid*       gridPtr{};
-        GLFWwindow* window{};
-        Tile*       gridBorderTile{};
-        GridTile*   gridTile{};
+        Grid*                     gridPtr{};    // only an observer
+        smart_GLFWwindow          window{};
+        std::unique_ptr<Tile>     gridBorderTile{};
+        std::unique_ptr<GridTile> gridTile{};
 
         namespace thread
         {
-            std::optional<std::thread> workerThread{ std::nullopt };
-            std::atomic<bool>          done{ false };
-            bool                       block{ true };
-            bool                       doUpdate{ false };
+            std::optional<std::jthread> workerThread{ std::nullopt };
+            std::atomic<bool>           done{ false };
+            bool                        block{ true };
+            bool                        doUpdate{ false };
 
             void blockHere()
             {
@@ -121,8 +149,11 @@ namespace RenderEngine
 
                 try {
                     data::thread::workerThread->join();
+                } catch (std::system_error& e) {
+                    std::cerr << "\nAn exception caught on worker thread" << '\n'
+                              << "Error cause: " << e.what() << " (" << e.code() << ")\n\n";
                 } catch (std::exception& e) {
-                    std::cerr << "\nThread Error: " << e.what() << " (" << GET_TYPE_NAME_FROM_VAR(e) << ")\n\n";
+                    std::cerr << "\nThread Error: " << e.what() << " (" << util::type_name<decltype(e)>() << ")\n\n";
                 }
             }
         }
@@ -140,7 +171,7 @@ namespace RenderEngine
             if (sum >= timeInterval) {
                 // std::cout << "\n\033[1A\033[2KFPS: " << 1 / (sum / interval);
                 auto title{ configuration::title + " [FPS: " + std::to_string(1 / (sum / counter)).substr(0, 5) + "]" };
-                glfwSetWindowTitle(data::window, title.c_str());
+                glfwSetWindowTitle(data::window.get(), title.c_str());
                 sum     = 0.0f;
                 counter = 0;
             }
@@ -150,8 +181,15 @@ namespace RenderEngine
 
     //=================================================================================================
 
+    // return 0 if success, otherwise error
     int initialize(Grid& grid, float delay = 1e-5f, bool vsync = true)
     {
+        // initialize glfw
+        glfwInit();
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
         data::window = initializeWindow("Game of Life", vsync);
         if (!data::window) {
             std::cout << "There's an error when creating window.\n";
@@ -161,7 +199,7 @@ namespace RenderEngine
 
         data::gridPtr = &grid;
 
-        data::gridBorderTile = new Tile{
+        data::gridBorderTile = std::make_unique<Tile>(
             1.0f,
             "./resources/shaders/shader.vs",
             "./resources/shaders/shader.fs",
@@ -169,14 +207,14 @@ namespace RenderEngine
             GL_LINEAR,
             GL_LINEAR,
             GL_REPEAT,
-            { data::gridPtr->getLength() / 2.0f, data::gridPtr->getWidth() / 2.0f, 0.0f },    // pos
-            { 1.0f, 1.0f, 1.0f },                                                             // color
-            { data::gridPtr->getLength(), data::gridPtr->getWidth(), 0.0f }                   // scale
-        };
+            glm::vec3{ data::gridPtr->getLength() / 2.0f, data::gridPtr->getWidth() / 2.0f, 0.0f },    // pos
+            glm::vec3{ 1.0f, 1.0f, 1.0f },                                                             // color
+            glm::vec3{ data::gridPtr->getLength(), data::gridPtr->getWidth(), 0.0f }                   // scale
+        );
 
         data::gridBorderTile->getPlane().multiplyTexCoords(data::gridPtr->getLength(), data::gridPtr->getWidth());
 
-        data::gridTile = new GridTile{
+        data::gridTile = std::make_unique<GridTile>(
             data::gridPtr->getLength(),
             data::gridPtr->getWidth(),
             "./resources/shaders/gridShader.vert",
@@ -185,12 +223,12 @@ namespace RenderEngine
             GL_LINEAR,
             GL_LINEAR,
             GL_REPEAT,
-            { data::gridPtr->getLength() / 2.0f, data::gridPtr->getWidth() / 2.0f, 0.0f },    // pos
-            { 1.0f, 1.0f, 1.0f },                                                             // color
-            { data::gridPtr->getLength(), data::gridPtr->getWidth(), 0.0f }                   // scale
-        };
+            glm::vec3{ data::gridPtr->getLength() / 2.0f, data::gridPtr->getWidth() / 2.0f, 0.0f },    // pos
+            glm::vec3{ 1.0f, 1.0f, 1.0f },                                                             // color
+            glm::vec3{ data::gridPtr->getLength(), data::gridPtr->getWidth(), 0.0f }                   // scale
+        );
 
-        camera::camera        = new Camera{};
+        camera::camera        = std::make_unique<Camera>();
         camera::camera->speed = 100.0f;    // 10 tiles per movement
         resetCamera(true);
 
@@ -203,9 +241,14 @@ namespace RenderEngine
     {
         data::thread::blockHere();
 
-        delete data::gridTile;
-        delete data::gridBorderTile;
-        delete camera::camera;
+        data::gridPtr = nullptr;
+        data::gridTile.reset();
+        data::gridBorderTile.reset();
+
+        data::window.reset();
+        camera::camera.reset();
+
+        glfwTerminate();
     }
 
     void drawBorder(const glm::mat4& projMat, const glm::mat4& viewMat)
@@ -216,7 +259,8 @@ namespace RenderEngine
             shouldDraw = true;
             break;
 
-        case simulation::GridMode::AUTO: {
+        case simulation::GridMode::AUTO:
+        {
             const float   xDelta{ configuration::width / camera::camera->zoom };    // (number of cells per width of screen)/2
             constexpr int minNumberOfCellsPerScreenHeight{ 100 };                   // change accordingly
             if (xDelta <= minNumberOfCellsPerScreenHeight / 2.0f) {
@@ -256,7 +300,7 @@ namespace RenderEngine
         data::gridBorderTile->draw();
     }
 
-    void drawGrid(const glm::mat4& projMat, const glm::mat4& viewMat, int xStart, int xEnd, int yStart, int yEnd, bool update = false)
+    void drawGrid(const glm::mat4& projMat, const glm::mat4& viewMat)
     {
         // idk
         data::gridTile->m_shader.use();
@@ -269,11 +313,6 @@ namespace RenderEngine
 
         data::gridTile->m_shader.setMat4("model", model);
 
-        // data::gridTile->setState(data::gridPtr->data(), xStart, xEnd, yStart, yEnd);
-        // data::gridTile->draw();
-
-        // data::gridTile->getPlane().customizeIndices(data::gridPtr->data(), xStart, xEnd, yStart, yEnd);
-        // data::gridTile->getPlane().swapIndices();
         data::gridTile->draw();
     }
 
@@ -309,7 +348,8 @@ namespace RenderEngine
         const auto& [width, height]{ data::gridPtr->getDimension() };
 
         constexpr float offset{ 1.5f };
-        // culling
+
+        // culling (update currentBorder)
         // clang-format off
         const int rowLeftBorder  { static_cast<int>( xPos + left       - offset > 0      ? xPos + left   - offset : 0) };
         const int rowRightBorder { static_cast<int>( xPos + right + 1  + offset < width  ? xPos + right  + offset : width) };
@@ -317,24 +357,25 @@ namespace RenderEngine
         const int colBottomBorder{ static_cast<int>( yPos + bottom + 1 - offset > 0      ? yPos + bottom - offset : 0) };
         // clang-format on
 
+        camera::currentBorder = { rowLeftBorder, rowRightBorder, colBottomBorder, colTopBorder };
+
         // update states
-        bool shouldUpdateFrame{ updateStates(rowLeftBorder, rowRightBorder, colBottomBorder, colTopBorder) };    // update grid if timing::sumTime > delay
-        // if (!simulation::pause) {
-        //     data::gridPtr->updateState();
-        // }
+        updateStates(camera::prevBorder, camera::currentBorder);
+
+        camera::prevBorder = camera::currentBorder;
 
         // grid
         drawBorder(projMat, viewMat);
 
         // new grid
-        drawGrid(projMat, viewMat, rowLeftBorder, rowRightBorder, colBottomBorder, colTopBorder);
+        drawGrid(projMat, viewMat);
         // drawGrid(projMat, viewMat, left, right, top, bottom);
 
-        glfwSwapBuffers(data::window);
+        glfwSwapBuffers(data::window.get());
         updateCamera();
 
         // input
-        processInput(data::window);
+        processInput(data::window.get());
         processMouseButton();
         glfwPollEvents();
 
@@ -352,21 +393,15 @@ namespace RenderEngine
 
     //=================================================================================================
 
-    GLFWwindow* initializeWindow(const std::string& windowName, bool vsync)
+    smart_GLFWwindow initializeWindow(const std::string& windowName, bool vsync)
     {
-        // initialize glfw
-        glfwInit();
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
         // window creation
-        GLFWwindow* window{ glfwCreateWindow(configuration::width, configuration::height, windowName.c_str(), NULL, NULL) };
+        smart_GLFWwindow window{ glfwCreateWindow(configuration::width, configuration::height, windowName.c_str(), NULL, NULL) };
         if (!window) {
             std::cerr << "Failed to create GLFW window\n";
             return nullptr;
         }
-        glfwMakeContextCurrent(window);
+        glfwMakeContextCurrent(window.get());
 
         // glad: load all OpenGL function pointers
         if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
@@ -376,11 +411,11 @@ namespace RenderEngine
 
         // set callbacks
         //--------------
-        glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
-        glfwSetCursorPosCallback(window, cursor_position_callback);
-        glfwSetScrollCallback(window, scroll_callback);
-        glfwSetMouseButtonCallback(window, mouse_button_callback);
-        glfwSetKeyCallback(window, key_callback);
+        glfwSetFramebufferSizeCallback(window.get(), framebuffer_size_callback);
+        glfwSetCursorPosCallback(window.get(), cursor_position_callback);
+        glfwSetScrollCallback(window.get(), scroll_callback);
+        glfwSetMouseButtonCallback(window.get(), mouse_button_callback);
+        glfwSetKeyCallback(window.get(), key_callback);
 
         // enable depth test
         // glEnable(GL_DEPTH_TEST);
@@ -566,7 +601,7 @@ namespace RenderEngine
     int shouldClose()
     {
         if (data::window) {
-            return simulation::stop = glfwWindowShouldClose(data::window);
+            return simulation::stop = glfwWindowShouldClose(data::window.get());
         } else {
             return false;
         }
@@ -607,7 +642,7 @@ namespace RenderEngine
     }
 
     // return true if thread has done
-    bool updateStates(int xStart, int xEnd, int yStart, int yEnd)
+    bool updateStates(const Border& prev, const Border& current)
     {
         using namespace data::thread;
 
@@ -617,19 +652,24 @@ namespace RenderEngine
         }
 
         if (!workerThread.has_value()) {
-            workerThread.emplace([&](int x1, int x2, int y1, int y2) {
-                data::gridTile->getPlane().customizeIndices(data::gridPtr->data(), x1, x2, y1, y2);
-                if (!simulation::pause && doUpdate) {
-                    data::gridPtr->updateState();
-                    doUpdate = false;
-                }
-                done = true;
-            },
-                                 xStart, xEnd, yStart, yEnd);
+            workerThread.emplace(
+                [&](const Border& prevBorder, const Border& currentBorder) {
+                    util::Timer timer{ "workerThread" };
+                    if (currentBorder != prevBorder || !simulation::pause) {
+                        const auto& [x1, x2, y1, y2]{ currentBorder };
+                        data::gridTile->getPlane().customizeIndices(data::gridPtr->data(), x1, x2, y1, y2);
+                    }
+                    if (!simulation::pause && doUpdate) {
+                        data::gridPtr->updateState();
+                        doUpdate = false;
+                    }
+                    done = true;
+                },
+                prev, current
+            );
         } else {
             if (done || block) {
                 blockHere();
-                // workerThread->join();
                 workerThread.reset();
 
                 done  = false;
@@ -638,7 +678,6 @@ namespace RenderEngine
             }
         }
 
-        // std::cout << "Not join\n";
         return false;
     }
 
@@ -646,7 +685,7 @@ namespace RenderEngine
     {
         double xPos{};
         double yPos{};
-        glfwGetCursorPos(data::window, &xPos, &yPos);    // get position relative to top-left corner (in px)
+        glfwGetCursorPos(data::window.get(), &xPos, &yPos);    // get position relative to top-left corner (in px)
 
         yPos = configuration::height - yPos;
 
