@@ -79,6 +79,7 @@ namespace RenderEngine
         int   width{ 800 };
         int   height{ 600 };
         float aspectRatio{ 800 / static_cast<float>(600) };
+        bool  vsync{ true };
 
         std::string title{ "Game of Life" };
     }
@@ -98,6 +99,7 @@ namespace RenderEngine
         float lastY{};
         bool  firstMouse{ true };
         bool  captureMouse{ false };
+        bool  buttonPressed{ false };
 
         bool leftButtonPressed{};
         bool rightButtonPressed{};
@@ -115,6 +117,7 @@ namespace RenderEngine
     {
         bool pause{ false };
         bool stop{ false };
+        bool forceFrameUpdate{ false };
 
         enum GridMode
         {
@@ -151,7 +154,7 @@ namespace RenderEngine
                     data::thread::workerThread->join();
                 } catch (std::system_error& e) {
                     std::cerr << "\nAn exception caught on worker thread" << '\n'
-                              << "Error cause: " << e.what() << " (" << e.code() << ")\n\n";
+                              << "Error cause: " << e.what() << " (" << e.code() << " of type " << util::type_name<decltype(e)>() << ")\n\n ";
                 } catch (std::exception& e) {
                     std::cerr << "\nThread Error: " << e.what() << " (" << util::type_name<decltype(e)>() << ")\n\n";
                 }
@@ -170,7 +173,7 @@ namespace RenderEngine
             counter++;
             if (sum >= timeInterval) {
                 // std::cout << "\n\033[1A\033[2KFPS: " << 1 / (sum / interval);
-                auto title{ configuration::title + " [FPS: " + std::to_string(1 / (sum / counter)).substr(0, 5) + "]" };
+                auto title{ configuration::title + " [FPS: " + std::to_string(1 / (sum / counter)).substr(0, 5) + " | " + std::to_string(1000 * sum / counter) + "ms]" };
                 glfwSetWindowTitle(data::window.get(), title.c_str());
                 sum     = 0.0f;
                 counter = 0;
@@ -318,6 +321,8 @@ namespace RenderEngine
 
     void render()
     {
+        util::Timer timer{ "render" };
+
         // background color
         if (!simulation::pause) {
             glClearColor(0.1f, 0.1f, 0.11f, 1.0f);
@@ -421,6 +426,8 @@ namespace RenderEngine
         // glEnable(GL_DEPTH_TEST);
         glEnable(GL_BLEND);
 
+        configuration::vsync = vsync;
+
         // turn off vsync
         if (!vsync) {
             glfwSwapInterval(0);
@@ -480,20 +487,28 @@ namespace RenderEngine
             mouse::leftButtonPressed = true;
             simulationStateBefore    = simulation::pause;    // save simulation state before (paused or not)
             simulation::pause        = true;                 // pause updating states when button pressed
+
+            mouse::buttonPressed = true;
         } else if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE) {
             mouse::leftButtonPressed = false;
             // simulation::pause = false;                   // resume updating states when button released
             simulation::pause = simulationStateBefore;    // restore simulation state before (paused or not)
+
+            mouse::buttonPressed = false;
         }
 
         if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS) {
             mouse::rightButtonPressed = true;
             simulationStateBefore     = simulation::pause;    // save simulation state before (paused or not)
             simulation::pause         = true;                 // pause updating states when button pressed
+
+            mouse::buttonPressed = true;
         } else if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_RELEASE) {
             mouse::rightButtonPressed = false;
             // simulation::pause = false;                   // resume updating states when button released
             simulation::pause = simulationStateBefore;    // restore simulation state before (paused or not)
+
+            mouse::buttonPressed = false;
         }
 
         double xPos{};
@@ -584,6 +599,8 @@ namespace RenderEngine
             data::thread::blockHere();
 
             data::gridPtr->clear();
+
+            simulation::forceFrameUpdate = true;
         }
 
         // populate grid with new cells
@@ -595,6 +612,17 @@ namespace RenderEngine
             data::gridPtr->populate(density);
 
             std::cout << "populate with density: " << density << '\n';
+
+            simulation::forceFrameUpdate = true;
+        }
+
+        if (key == GLFW_KEY_V && action == GLFW_PRESS) {
+            configuration::vsync = !configuration::vsync;
+            if (configuration::vsync) {
+                glfwSwapInterval(1);
+            } else {
+                glfwSwapInterval(0);
+            }
         }
     }
 
@@ -655,7 +683,7 @@ namespace RenderEngine
             workerThread.emplace(
                 [&](const Border& prevBorder, const Border& currentBorder) {
                     util::Timer timer{ "workerThread" };
-                    if (currentBorder != prevBorder || !simulation::pause) {
+                    if (currentBorder != prevBorder || !simulation::pause || mouse::buttonPressed || simulation::forceFrameUpdate) {
                         const auto& [x1, x2, y1, y2]{ currentBorder };
                         data::gridTile->getPlane().customizeIndices(data::gridPtr->data(), x1, x2, y1, y2);
                     }
@@ -663,7 +691,8 @@ namespace RenderEngine
                         data::gridPtr->updateState();
                         doUpdate = false;
                     }
-                    done = true;
+                    done                         = true;
+                    simulation::forceFrameUpdate = false;
                 },
                 prev, current
             );
@@ -689,9 +718,6 @@ namespace RenderEngine
 
         yPos = configuration::height - yPos;
 
-        static double xPos_last{ xPos };
-        static double yPos_last{ yPos };
-
         float xDelta{ configuration::width / camera::camera->zoom };
         float yDelta{ configuration::height / camera::camera->zoom };
 
@@ -711,29 +737,61 @@ namespace RenderEngine
         }
 
         // last pos
-        int x_last{ static_cast<int>(camera::camera->position.x - (xDelta - 2.0f * xPos_last / camera::camera->zoom) + xOffset) };    // last col
-        int y_last{ static_cast<int>(camera::camera->position.x - (yDelta - 2.0f * yPos_last / camera::camera->zoom) + yOffset) };    // last row
+        static int  x_last{ x };
+        static int  y_last{ y };
+        static bool leftButtonPressed_last{ false };
 
-        // for linear interpolation
-        float grad{ static_cast<float>((y - yPos_last) / static_cast<float>(x - xPos_last)) };
+        if (mouse::leftButtonPressed && leftButtonPressed_last) {
+            // for linear interpolation
+            int x1{ x_last };
+            int y1{ y_last };
+            int x2{ x };
+            int y2{ y };
 
-        // TODO: implement an interpolation when cursor is moved too fast that it skip some cells
+            float grad{ static_cast<float>((y2 - y1) / static_cast<float>(x2 - x1)) };    // y is flipped
+
+            if (x1 > x2) {
+                std::swap(x1, x2);
+                std::swap(y1, y2);
+            }
+
+            // TODO: implement an interpolation when cursor is moved too fast that it skip some cells
+            // linear interpolation [not working]
+            // std::cout << "x_last: " << x_last << ", y_last: " << y_last << " | x: " << x << ", y: " << y << '\n';
+            if (std::abs(grad) <= 1.0f) {
+                if (x1 > x2) {
+                    std::swap(x1, x2);
+                    std::swap(y1, y2);
+                }
+                for (int col{ x1 }; col < x2; ++col) {
+                    int row{ grad * (col - x1) + y1 };
+                    if (data::gridPtr->isInBound(col, row)) {
+                        auto& cell{ data::gridPtr->getCell(col, row) };
+                        cell.setLive();
+                        cell.update();
+                    }
+                }
+            } else {
+                if (y1 > y2) {
+                    std::swap(x1, x2);
+                    std::swap(y1, y2);
+                }
+                float inv_grad{ static_cast<float>((x2 - x1) / static_cast<float>(y2 - y1)) };    // y is flipped
+                for (int row{ y1 }; row < y2; ++row) {
+                    int col{ inv_grad * (row - y1) + x1 };
+                    if (data::gridPtr->isInBound(col, row)) {
+                        auto& cell{ data::gridPtr->getCell(col, row) };
+                        cell.setLive();
+                        cell.update();
+                    }
+                }
+            }
+        }
+        x_last                 = x;
+        y_last                 = y;
+        leftButtonPressed_last = mouse::leftButtonPressed;
 
         if (mouse::leftButtonPressed) {
-            // linear interpolation [not working]
-            // for (int col{ xPos_last }; col < x; ++col)
-            // {
-            //     int row{ -(grad * (col - xPos_last) + yPos_last) };       // flip back up-down
-            //     if (data::gridPtr->isInBound(col, row))
-            //     {
-            //         auto& cell{ data::gridPtr->getCell(col, row) };
-            //         cell.setLive();
-            //         cell.update();
-            //     }
-            // }
-            xPos_last = xPos;
-            yPos_last = yPos;
-
             // current click
             if (data::gridPtr->isInBound(x, y)) {
                 auto& cell{ data::gridPtr->getCell(x, y) };

@@ -13,7 +13,7 @@ int main(int argc, char** argv)
     if (argc > 1) {
         std::string arg{ argv[1] };
         if (arg == "-h") {
-            std::cout << "Usage: <delay> <startDensity> <length/width>\n";
+            std::cout << "Usage: <delay> <startDensity> <length/width> <pause> <vsync> <print>\n";
             return 0;
         }
     }
@@ -47,8 +47,14 @@ int main(int argc, char** argv)
 
     bool vsync{ true };
     if (argc > 5) {
-        std::stringstream ss{ std::string{ argv[4] } };
+        std::stringstream ss{ std::string{ argv[5] } };
         ss >> vsync;
+    }
+
+    bool print{ false };
+    if (argc > 6) {
+        std::stringstream ss{ std::string{ argv[6] } };
+        ss >> print;
     }
 
     std::cout << "Creating and populating grid... ";
@@ -57,7 +63,7 @@ int main(int argc, char** argv)
     std::cout << "Done\n";
 
     // enable timer print
-    util::Timer::s_doPrint = false;
+    util::Timer::s_doPrint = print;
 
     RenderEngine::simulation::pause = pause;
 
