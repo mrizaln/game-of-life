@@ -55,7 +55,7 @@ public:
             std::lock_guard lock{ m_mt };
 
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-            glBufferData(GL_ELEMENT_ARRAY_BUFFER, m_indices_custom_edit->size() * sizeof(m_indices_custom_edit->front()), &m_indices_custom_edit->front(), GL_STATIC_DRAW);
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER, m_indices_custom_edit->size() * sizeof(m_indices_custom_edit->front()), &m_indices_custom_edit->front(), GL_DYNAMIC_DRAW);
 
             indicesSize             = m_indices_custom_edit->size();
             m_indices_custom_render = std::move(m_indices_custom_edit);
@@ -231,7 +231,7 @@ private:
         glBufferData(GL_ARRAY_BUFFER, m_interleavedVertices.size() * sizeof(m_interleavedVertices.front()), &m_interleavedVertices.front(), GL_STATIC_DRAW);
 
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, m_indices.size() * sizeof(m_indices.front()), &m_indices.front(), GL_STATIC_DRAW);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, m_indices.size() * sizeof(m_indices.front()), &m_indices.front(), GL_DYNAMIC_DRAW);
 
         // vertex attribute
         //-----------------

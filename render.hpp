@@ -80,6 +80,7 @@ namespace RenderEngine
         int   height{ 600 };
         float aspectRatio{ 800 / static_cast<float>(600) };
         bool  vsync{ true };
+        bool  wireframe{ false };
 
         std::string title{ "Game of Life" };
     }
@@ -622,6 +623,14 @@ namespace RenderEngine
                 glfwSwapInterval(1);
             } else {
                 glfwSwapInterval(0);
+            }
+        }
+
+        if (key == GLFW_KEY_TAB && action == GLFW_PRESS) {
+            if ((configuration::wireframe = !configuration::wireframe)) {
+                glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+            } else {
+                glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
             }
         }
     }

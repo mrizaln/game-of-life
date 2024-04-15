@@ -1,6 +1,10 @@
 # game-of-life
+
 Conway's Game of Life
 
+## TODO
+
+- [ ] Fix data race
 
 Preview:
 

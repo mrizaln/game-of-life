@@ -13,7 +13,7 @@
 #include <utility>    // std::pair
 #include <vector>
 
-#include <perlin_noise/PerlinNoise.hpp>
+#include <PerlinNoise.hpp>
 
 class Cell
 {
