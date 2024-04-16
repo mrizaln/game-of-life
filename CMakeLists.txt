@@ -31,8 +31,8 @@ target_link_libraries(
          spdlog::spdlog
          sync-cpp)
 
-target_compile_options(main PRIVATE -fsanitize=thread)
-target_link_options(main PRIVATE -fsanitize=thread)
+# target_compile_options(main PRIVATE -fsanitize=thread)
+# target_link_options(main PRIVATE -fsanitize=thread)
 
 # link resources to build directory
 add_custom_command(

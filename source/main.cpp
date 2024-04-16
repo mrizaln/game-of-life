@@ -1,10 +1,13 @@
-#include <string>
-#include <sstream>
-#include <iostream>
-
-#include "renderer.hpp"
-#include "timer.hpp"
+#include "application.hpp"
 #include "game.hpp"
+#include "timer.hpp"
+
+#include <glad/glad.h>
+#include <GLFW/glfw3.h>
+
+#include <iostream>
+#include <sstream>
+#include <string>
 
 int main(int argc, char** argv)
 {
@@ -60,29 +63,16 @@ int main(int argc, char** argv)
     grid.populate(density);
     std::cout << "Done\n";
 
-    glfwInit();
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
-    WindowManager::createInstance();
-    auto window = WindowManager::createWindow("Game of Life", 800, 600);
-    if (!window.has_value()) {
-        std::cerr << "Failed to create window";
-    }
-
     // enable timer print
     util::Timer::s_doPrint = print;
 
     // limit the scope of Renderer so that it's destructor is called before glfwTerminate
-    {
-        window->setVsync(vsync);
-        window->useHere();
-
-        Renderer renderer{ std::move(window).value(), grid, delay };
-        renderer.run();
-    }
-
-    WindowManager::destroyInstance();
-    glfwTerminate();
+    Application app{ {
+        .m_windowWidth  = 800,
+        .m_windowHeight = 600,
+        .m_gridWidth    = length,
+        .m_gridHeight   = width,
+        .m_delay        = static_cast<std::size_t>(delay * 1000),    // s to ms
+    } };
+    app.run();
 }

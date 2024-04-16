@@ -8,15 +8,11 @@
 #include "window.hpp"
 #include "window_manager.hpp"
 
-#include <algorithm>
-#include <atomic>
-#include <chrono>
-#include <future>
-#include <optional>
+#define GLFW_INCLUDE_NONE
+#include <GLFW/glfw3.h>
 #include <spdlog/spdlog.h>
-#include <stdexcept>
-#include <string_view>
-#include <utility>
+
+#include <algorithm>
 
 class Renderer
 {
@@ -28,15 +24,6 @@ public:
         AUTO,
 
         numOfGridModes,
-    };
-
-    struct Simulation
-    {
-        GridMode          m_gridMode      = GridMode::AUTO;
-        float             m_timeSum       = 0.0f;
-        float             m_delay         = 1e-5f;
-        std::atomic<bool> m_pause         = false;
-        std::atomic<bool> m_inhibitUpdate = false;
     };
 
     struct Border
@@ -57,18 +44,17 @@ public:
         bool operator!=(const Border& other) const { return !(*this == other); }
     };
 
-    enum class WorkerState
+    template <typename T>
+    struct Dimension
     {
-        IDLE,
-        UPDATE_STATE,
-        UPDATE_INDICES
+        T m_width  = 0;
+        T m_height = 0;
     };
 
-    struct Worker
+    struct Cache
     {
-        std::optional<std::future<void>> m_future;
-        std::atomic<WorkerState>         m_state    = WorkerState::IDLE;
-        std::atomic<bool>                m_doUpdate = false;
+        Dimension<int> m_gridDimension   = {};
+        Dimension<int> m_windowDimension = {};
     };
 
     Renderer()                           = delete;
@@ -77,10 +63,8 @@ public:
     Renderer(Renderer&&)                 = delete;
     Renderer& operator=(Renderer&&)      = delete;
 
-    Renderer(Window&& window, Grid& grid, float delay)
-        : m_grid{ grid }
-        , m_window{ std::move(window) }
-        , m_borderTile{
+    Renderer(const Window& window, const Grid& grid)
+        : m_borderTile{
             1.0f,
             "./resources/shaders/shader.vs",
             "./resources/shaders/shader.fs",
@@ -105,126 +89,199 @@ public:
             glm::vec3{ 1.0f, 1.0f, 1.0f },                                                       // color
             glm::vec3{ grid.getLength(), grid.getWidth(), 0.0f },                                // scale
         }
-        , m_simulation{ .m_delay = std::max(delay, 1e-5f) }
         , m_camera{}
-        , m_currentBorder{}
-        , m_previousBorder{}
-        , m_worker{}
+        , m_gridMode{ GridMode::AUTO }
     {
         m_borderTile.getPlane().multiplyTexCoords((float)grid.getLength(), (float)grid.getWidth());
         m_camera.speed = 100.0f;
+
+        const auto winProp        = window.getProperties();
+        m_cache.m_windowDimension = {
+            .m_width  = winProp.m_width,
+            .m_height = winProp.m_height,
+        };
+        m_cache.m_gridDimension = {
+            .m_width  = (int)grid.getLength(),    // might throw if first element not exist
+            .m_height = (int)grid.getWidth(),
+        };
+
+        resetCamera(true);
     }
 
-    void run()
+    void render(const Window& window, const Grid::Grid_type& gridData, bool isPaused)
     {
-        configureControl();
-        resetCamera(true);
+        const auto winProp        = window.getProperties();
+        m_cache.m_windowDimension = {
+            .m_width  = winProp.m_width,
+            .m_height = winProp.m_height,
+        };
+        m_cache.m_gridDimension = {
+            .m_width  = (int)gridData.at(0).size(),    // might throw if first element not exist
+            .m_height = (int)gridData.size(),
+        };
 
-        m_window.run([this] {
-            if (!m_simulation.m_pause) {
-                glClearColor(0.1f, 0.1f, 0.11f, 1.0f);
-            } else {
-                glClearColor(0.0f, 0.0f, 0.02f, 1.0f);
+        if (isPaused) {
+            glClearColor(0.0f, 0.0f, 0.02f, 1.0f);
+        } else {
+            glClearColor(0.1f, 0.1f, 0.11f, 1.0f);
+        }
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        glViewport(0, 0, winProp.m_width, winProp.m_height);
+
+        // orthogonal frustum
+        // clang-format off
+        const float left  { -winProp.m_width  / static_cast<float>(m_camera.zoom) };
+        const float right {  winProp.m_width  / static_cast<float>(m_camera.zoom) };
+        const float bottom{ -winProp.m_height / static_cast<float>(m_camera.zoom) };
+        const float top   {  winProp.m_height / static_cast<float>(m_camera.zoom) };
+        const float near  { -10.0f };
+        const float far   {  10.0f };
+        // clang-format on
+
+        // projection matrix
+        auto projMat{ glm::ortho(left, right, bottom, top, near, far) };
+
+        // view matrix
+        auto viewMat{ m_camera.getViewMatrix() };
+
+        const auto& xPos{ m_camera.position.x };
+        const auto& yPos{ m_camera.position.y };
+        const auto  width  = (float)m_cache.m_gridDimension.m_width;
+        const auto  height = (float)m_cache.m_gridDimension.m_height;
+
+        constexpr float offset{ 1.5f };
+
+        // culling (update currentBorder)
+        // clang-format off
+        const int rowLeftBorder  { static_cast<int>( xPos + left       - offset > 0      ? xPos + left   - offset : 0) };
+        const int rowRightBorder { static_cast<int>( xPos + right + 1  + offset < width  ? xPos + right  + offset : width) };
+        const int colTopBorder   { static_cast<int>( yPos + top        + offset < height ? yPos + top    + offset : height) };
+        const int colBottomBorder{ static_cast<int>( yPos + bottom + 1 - offset > 0      ? yPos + bottom - offset : 0) };
+        // clang-format on
+
+        updateIndices({ rowLeftBorder, rowRightBorder, colBottomBorder, colTopBorder }, gridData);
+
+        // draw
+        drawBorder(projMat, viewMat, isPaused);
+        drawGrid(projMat, viewMat);
+    }
+
+    void processCameraMovement(Camera::CameraMovement movement, float deltaTime)
+    {
+        float xPos{ m_camera.position.x };
+        float yPos{ m_camera.position.y };
+        float xDelta{ m_cache.m_windowDimension.m_width / m_camera.zoom };
+        float yDelta{ m_cache.m_windowDimension.m_height / m_camera.zoom };
+        auto& [numOfColumns, numOfRows]{ m_cache.m_gridDimension };    // potential data race
+
+        auto shouldMove = [&] {
+            // clang-format off
+            switch (movement) {
+            case Camera::RIGHT:     return (xPos + xDelta) < (float)numOfColumns;
+            case Camera::LEFT:      return (xPos - xDelta) > 0;
+            case Camera::UPWARD:    return (yPos + yDelta) < (float)numOfRows;
+            case Camera::DOWNWARD:  return (yPos - yDelta) > 0;
+            default: return false;
             }
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-            // orthogonal frustum
-            // clang-format off
-            auto winProp = m_window.getProperties();
-            glViewport(0, 0, winProp.m_width, winProp.m_height);
-
-            const float left  { -winProp.m_width  / static_cast<float>(m_camera.zoom) };
-            const float right {  winProp.m_width  / static_cast<float>(m_camera.zoom) };
-            const float bottom{ -winProp.m_height / static_cast<float>(m_camera.zoom) };
-            const float top   {  winProp.m_height / static_cast<float>(m_camera.zoom) };
-            const float near  { -10.0f };
-            const float far   {  10.0f };
             // clang-format on
+        }();
 
-            // projection matrix
-            auto projMat{ glm::ortho(left, right, bottom, top, near, far) };
+        if (shouldMove) {
+            m_camera.moveCamera(movement, deltaTime);
+        }
+    }
 
-            // view matrix
-            auto viewMat{ m_camera.getViewMatrix() };
+    glm::vec3 getCameraPosition()
+    {
+        return m_camera.position;
+    }
 
-            const auto& xPos{ m_camera.position.x };
-            const auto& yPos{ m_camera.position.y };
-            const auto  width  = (float)m_grid.getLength();
-            const auto  height = (float)m_grid.getWidth();
+    float getCameraZoom()
+    {
+        return m_camera.zoom;
+    }
 
-            constexpr float offset{ 1.5f };
+    void setCameraPosition(float xPos, float yPos)
+    {
+        m_camera.position.x = xPos;
+        m_camera.position.y = yPos;
+    }
 
-            // culling (update currentBorder)
-            // clang-format off
-            const int rowLeftBorder  { static_cast<int>( xPos + left       - offset > 0      ? xPos + left   - offset : 0) };
-            const int rowRightBorder { static_cast<int>( xPos + right + 1  + offset < width  ? xPos + right  + offset : width) };
-            const int colTopBorder   { static_cast<int>( yPos + top        + offset < height ? yPos + top    + offset : height) };
-            const int colBottomBorder{ static_cast<int>( yPos + bottom + 1 - offset > 0      ? yPos + bottom - offset : 0) };
-            // clang-format on
+    void setCameraZoom(float zoom)
+    {
+        m_camera.zoom = zoom;
+    }
 
-            m_currentBorder = { rowLeftBorder, rowRightBorder, colBottomBorder, colTopBorder };
-            updateStates();
-            m_previousBorder = m_currentBorder;
+    void setCameraSpeed(float speed)
+    {
+        m_camera.speed = speed;
+    }
 
-            // draw
-            drawBorder(projMat, viewMat);
-            drawGrid(projMat, viewMat);
+    void offsetCameraPosition(float xOffset, float yOffset, float multiplier = 1.0f)
+    {
+        m_camera.position.x += xOffset * m_camera.speed / multiplier;
+        m_camera.position.y += yOffset * m_camera.speed / multiplier;
+    }
 
-            // poll events
-            WindowManager::pollEvents();
-        });
+    void offsetCameraZoom(float yOffset)
+    {
+        m_camera.processMouseScroll(yOffset, Camera::ZOOM);
+    }
+
+    void resetCamera(bool resetZoom)
+    {
+        auto& [numOfColumns, numOfRows]{ m_cache.m_gridDimension };
+
+        // center camera
+        m_camera.position.x = (float)numOfColumns / 2.0f;
+        m_camera.position.y = (float)numOfRows / 2.0f;
+
+        constexpr int maxCol{ 75 };
+
+        if (resetZoom) {
+            auto width    = (float)m_cache.m_windowDimension.m_width;
+            m_camera.zoom = std::max({
+                2.0f * width / float(numOfColumns),    // all grid visible
+                4.0f * width / float(numOfColumns),    // half column
+                // 4/1.1f * height/float(numOfRows),     // half row
+
+                2.0f * width / float(maxCol)    // show only number of maxCol
+            });
+        }
+    }
+
+    void multiplyCameraSpeed(float multiplier)
+    {
+        m_camera.speed *= multiplier;
+    }
+
+    void cycleGridMode()
+    {
+        using Int  = std::underlying_type_t<GridMode>;
+        m_gridMode = static_cast<GridMode>(
+            (static_cast<Int>(m_gridMode) + 1) % static_cast<Int>(GridMode::numOfGridModes)
+        );
     }
 
 private:
-    Grid&      m_grid;
-    Window     m_window;
-    Tile       m_borderTile;
-    GridTile   m_gridTile;
-    Simulation m_simulation;
-    Camera     m_camera;
-    Border     m_currentBorder;
-    Border     m_previousBorder;
-    Worker     m_worker;
+    Tile     m_borderTile;
+    GridTile m_gridTile;
+    Camera   m_camera;
+    GridMode m_gridMode;
+    Cache    m_cache;
 
-    bool updateStates()
+    void updateIndices(const Border& border, const Grid::Grid_type& gridData)
     {
-        if (m_simulation.m_timeSum >= m_simulation.m_delay && m_worker.m_state == WorkerState::IDLE) {
-            m_worker.m_doUpdate    = true;
-            m_simulation.m_timeSum = 0.0f;
-        } else {
-            m_simulation.m_timeSum += (float)m_window.getDeltaTime();
-        }
-
-        if (!m_worker.m_future.has_value() || m_worker.m_future->wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
-            m_worker.m_future = std::async(std::launch::async, [this, curr = m_currentBorder, prev = m_previousBorder] {
-                util::Timer timer{ "workerThread" };
-
-                if (curr != prev || !m_simulation.m_inhibitUpdate || !m_simulation.m_pause) {
-                    m_worker.m_state             = WorkerState::UPDATE_INDICES;
-                    const auto& [x1, x2, y1, y2] = curr;
-                    m_gridTile.getPlane().customizeIndices(m_grid.data(), x1, x2, y1, y2);
-                }
-
-                if (!m_simulation.m_pause && m_worker.m_doUpdate) {
-                    m_worker.m_state = WorkerState::UPDATE_STATE;
-                    m_grid.updateState();
-                    m_worker.m_doUpdate = false;
-                }
-
-                m_worker.m_state = WorkerState::IDLE;
-            });
-
-            return false;
-        }
-
-        return true;
+        const auto& [x1, x2, y1, y2] = border;
+        m_gridTile.getPlane().customizeIndices(gridData, x1, x2, y1, y2);
     }
 
-    void drawBorder(const glm::mat4& projMat, const glm::mat4& viewMat)
+    void drawBorder(const glm::mat4& projMat, const glm::mat4& viewMat, bool isPaused)
     {
         bool shouldDraw{};
 
-        switch (m_simulation.m_gridMode) {
+        switch (m_gridMode) {
         case GridMode::ON:
         {
             shouldDraw = true;
@@ -232,8 +289,9 @@ private:
         }
         case GridMode::AUTO:
         {
-            const float   xDelta{ m_window.getProperties().m_width / m_camera.zoom };    // (number of cells per width of screen)/2
-            constexpr int minNumberOfCellsPerScreenHeight{ 100 };                        // change accordingly
+            const auto    winWidth{ m_cache.m_windowDimension.m_width };
+            const float   xDelta{ winWidth / m_camera.zoom };        // (number of cells per width of screen)/2
+            constexpr int minNumberOfCellsPerScreenHeight{ 100 };    // change accordingly
             if (xDelta <= minNumberOfCellsPerScreenHeight / 2.0f) {
                 shouldDraw = true;
             }
@@ -261,10 +319,10 @@ private:
         m_borderTile.m_shader.setMat4("model", model);
 
         // change color if simulation::pause
-        if (!m_simulation.m_pause) {
-            m_borderTile.m_color = { 1.0f, 1.0f, 1.0f };
-        } else {
+        if (isPaused) {
             m_borderTile.m_color = { 0.7f, 1.0f, 0.7f };
+        } else {
+            m_borderTile.m_color = { 1.0f, 1.0f, 1.0f };
         }
 
         // draw
@@ -284,149 +342,6 @@ private:
         m_gridTile.m_shader.setMat4("model", model);
 
         m_gridTile.draw();
-    }
-
-    // i'm not sure what is this for
-    void updateCamera()
-    {
-        float delay{ m_simulation.m_delay };
-
-        // if lag
-        if (delay < 1e-5f) {
-            delay = 1e-5f;
-        }
-
-        if (auto delta = (float)m_window.getDeltaTime(); delay < delta) {
-            delay = delta;
-        }
-    }
-
-    void resetCamera(bool resetZoom)
-    {
-        auto& [numOfColumns, numOfRows]{ m_grid.getDimension() };
-
-        // center camera
-        m_camera.position.x = (float)numOfColumns / 2.0f;
-        m_camera.position.y = (float)numOfRows / 2.0f;
-
-        constexpr int maxCol{ 75 };
-
-        if (resetZoom) {
-            auto width    = (float)m_window.getProperties().m_width;
-            m_camera.zoom = std::max({
-                2.0f * width / float(numOfColumns),    // all grid visible
-                4.0f * width / float(numOfColumns),    // half column
-                // 4/1.1f * height/float(numOfRows),     // half row
-
-                2.0f * width / float(maxCol)    // show only number of maxCol
-            });
-        }
-    }
-
-    void configureControl()
-    {
-        m_window.setCursorPosCallback([this](Window& window, double xPos, double yPos) {
-            if (!window.isMouseCaptured()) {
-                return;
-            }
-
-            auto& winProp{ window.getProperties() };
-            auto& lastX{ winProp.m_cursorPos.x };
-            auto& lastY{ winProp.m_cursorPos.y };
-
-            float xOffset = static_cast<float>(xPos - lastX);
-            float yOffset = static_cast<float>(lastY - yPos);
-
-            // instead of normal camera (yaw, pitch, etc.), i'm using this as sliding movement
-            // m_camera.processMouseMovement(xOffset, yOffset);
-            m_camera.position.x += xOffset * m_camera.speed / 200.0f;
-            m_camera.position.y += yOffset * m_camera.speed / 200.0f;
-
-            m_camera.processMouseMovement(xOffset, yOffset);
-        });
-
-        m_window.setScrollCallback([this](Window&, double, double yOffset) {
-            m_camera.processMouseScroll((float)yOffset, Camera::ZOOM);
-        });
-
-        m_window.setMouseButtonCallback([](Window& window, MouseButton::Button button, MouseButton::State state, Window::KeyModifier mods) {
-            if (button == MouseButton::Button::LEFT && state == MouseButton::State::PRESSED) {
-                // TODO: implement
-            } else if (button == MouseButton::Button::LEFT && state == MouseButton::State::RELEASED) {
-                // TODO: implement
-            }
-
-            if (button == MouseButton::Button::RIGHT && state == MouseButton::State::PRESSED) {
-                // TODO: implement
-            } else if (button == MouseButton::Button::RIGHT && state == MouseButton::State::RELEASED) {
-                // TODO: implement
-            }
-        });
-
-        using A = Window::KeyActionType;
-        m_window.addKeyEventHandler({ GLFW_KEY_Q, GLFW_KEY_ESCAPE }, 0, A::CALLBACK, [](Window& window) {
-            window.requestClose();
-        });
-
-        // camera movement
-        m_window.addKeyEventHandler({ GLFW_KEY_W, GLFW_KEY_UP }, 0, A::CONTINUOUS, [this](Window&) {
-            processCameraMovement(Camera::UPWARD);
-        });
-        m_window.addKeyEventHandler({ GLFW_KEY_S, GLFW_KEY_DOWN }, 0, A::CONTINUOUS, [this](Window&) {
-            processCameraMovement(Camera::DOWNWARD);
-        });
-        m_window.addKeyEventHandler({ GLFW_KEY_A, GLFW_KEY_LEFT }, 0, A::CONTINUOUS, [this](Window&) {
-            processCameraMovement(Camera::LEFT);
-        });
-        m_window.addKeyEventHandler({ GLFW_KEY_D, GLFW_KEY_RIGHT }, 0, A::CONTINUOUS, [this](Window&) {
-            processCameraMovement(Camera::RIGHT);
-        });
-
-        // camera speed
-        m_window.addKeyEventHandler(GLFW_KEY_I, 0, A::CONTINUOUS, [this](Window&) {
-            m_camera.speed *= 1.01f;
-        });
-        m_window.addKeyEventHandler(GLFW_KEY_K, 0, A::CONTINUOUS, [this](Window&) {
-            m_camera.speed /= 1.01f;
-        });
-
-        // simulation delay
-        m_window.addKeyEventHandler(GLFW_KEY_L, 0, A::CONTINUOUS, [this](Window&) {
-            m_simulation.m_delay *= 1.01f;
-        });
-        m_window.addKeyEventHandler(GLFW_KEY_J, 0, A::CONTINUOUS, [this](Window&) {
-            m_simulation.m_delay /= 1.01f;
-            if (m_simulation.m_delay < 1e-5f) {
-                m_simulation.m_delay = 1e-5f;
-            }
-        });
-    }
-
-    void processCameraMovement(Camera::CameraMovement movement)
-    {
-        const auto& winProp = m_window.getProperties();
-
-        float xPos{ m_camera.position.x };
-        float yPos{ m_camera.position.y };
-        float xDelta{ winProp.m_width / m_camera.zoom };
-        float yDelta{ winProp.m_height / m_camera.zoom };
-        auto& [numOfColumns, numOfRows]{ m_grid.getDimension() };    // potential data race
-
-        auto shouldMove = [&] {
-            // clang-format off
-            switch (movement) {
-            case Camera::RIGHT:     return (xPos + xDelta) < (float)numOfColumns;
-            case Camera::LEFT:      return (xPos - xDelta) > 0;
-            case Camera::UPWARD:    return (yPos + yDelta) < (float)numOfRows;
-            case Camera::DOWNWARD:  return (yPos - yDelta) > 0;
-            default: return false;
-            }
-            // clang-format on
-        }();
-
-        if (shouldMove) {
-            m_camera.moveCamera(movement, (float)m_window.getDeltaTime());
-        }
     }
 };
 

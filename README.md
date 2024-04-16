@@ -4,8 +4,9 @@ Conway's Game of Life
 
 ## TODO
 
-- [ ] Restructure code
-- [ ] Fix data race
+- [x] Restructure code
+- [x] Fix data race
+- [ ] Fix argument parsing
 
 Preview:
 

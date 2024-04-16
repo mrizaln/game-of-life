@@ -7,10 +7,8 @@
 
 #include <algorithm>    // std::generate
 #include <array>
-#include <atomic>
 #include <cstddef>    // std::size_t
 #include <iostream>
-#include <mutex>
 
 // #define ENABLE_NORMAL
 
@@ -46,25 +44,17 @@ public:
 
     ~Plane() = default;
 
-    // thread safe draw (LIE!)
     void draw()
     {
-        if (m_shouldSwap) {
-            std::scoped_lock lock{ m_mutex };
-
-            m_shouldSwap = false;
-            m_indices_front.swap(m_indices_back);
-
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-            glBufferData(GL_ELEMENT_ARRAY_BUFFER, m_indices_front.size() * sizeof(m_indices_front.front()), m_indices_front.data(), GL_DYNAMIC_DRAW);
-        }
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, m_shownIndices.size() * sizeof(m_shownIndices.front()), m_shownIndices.data(), GL_DYNAMIC_DRAW);
 
         // bind buffer
         glBindVertexArray(VAO);
 
         // draw
         // glDrawArrays(GL_TRIANGLES, 0, std::size(m_interleavedVertices));
-        std::size_t indicesSize{ m_indices_front.size() };
+        std::size_t indicesSize{ m_shownIndices.size() };
         glDrawElements(GL_TRIANGLES, indicesSize, GL_UNSIGNED_INT, 0);
 
         // unbind buffer
@@ -93,8 +83,6 @@ public:
     template <typename __bool_like = bool>
     void customizeIndices(const std::vector<std::vector<__bool_like>>& condition, int xStart, int xEnd, int yStart, int yEnd)
     {
-        std::scoped_lock lock{ m_mutex };
-
         util::Timer timer{ "customizeIndices" };
 
         std::vector<unsigned int> indices;
@@ -110,29 +98,25 @@ public:
                 auto idx{ (x * m_subdivideY + y) * 6 };
                 // std::cout << idx <<  ';
 
-                indices.push_back(m_indices[idx++]);
-                indices.push_back(m_indices[idx++]);
-                indices.push_back(m_indices[idx++]);
-                indices.push_back(m_indices[idx++]);
-                indices.push_back(m_indices[idx++]);
-                indices.push_back(m_indices[idx++]);
+                indices.push_back(m_fullIndices[idx++]);
+                indices.push_back(m_fullIndices[idx++]);
+                indices.push_back(m_fullIndices[idx++]);
+                indices.push_back(m_fullIndices[idx++]);
+                indices.push_back(m_fullIndices[idx++]);
+                indices.push_back(m_fullIndices[idx++]);
             }
         }
         // std::cout << '\n';
         // print(&indices);
 
         // print(&indices);
-        m_indices_back.clear();
-        m_indices_back = indices;
+        m_shownIndices = indices;
         // print(&m_indices_custom_edit.value());
-
-        m_shouldSwap = true;
     }
 
     void resetIndices()
     {
-        m_indices_front.clear();
-        m_indices_back.clear();
+        m_shownIndices.clear();
         deleteBuffers();
         setBuffers();
     }
@@ -156,7 +140,7 @@ public:
         // }
 
         std::cout << "\nIndices:\n";
-        const auto& ind{ indices ? *indices : m_indices };
+        const auto& ind{ indices ? *indices : m_fullIndices };
         for (std::size_t i{ 0 }; i < ind.size(); ++i) {
             std::cout << ind[i] << '\t';
             if ((i + 1) % 6 == 0) {
@@ -205,14 +189,9 @@ private:
     int m_subdivideY{};
 
     std::vector<vec_type>     m_vertices;
-    std::vector<unsigned int> m_indices;
+    std::vector<unsigned int> m_fullIndices;
+    std::vector<unsigned int> m_shownIndices{};
     std::vector<value_type>   m_interleavedVertices;
-
-    std::vector<unsigned int> m_indices_front{};
-    std::vector<unsigned int> m_indices_back{};
-    std::atomic<bool>         m_shouldSwap{};
-
-    mutable std::mutex m_mutex;
 
     value_type m_texCoordsMultiplierX{ 1.0 };
     value_type m_texCoordsMultiplierY{ 1.0 };
@@ -231,7 +210,7 @@ private:
         glBufferData(GL_ARRAY_BUFFER, m_interleavedVertices.size() * sizeof(m_interleavedVertices.front()), &m_interleavedVertices.front(), GL_STATIC_DRAW);
 
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, m_indices.size() * sizeof(m_indices.front()), &m_indices.front(), GL_DYNAMIC_DRAW);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, m_fullIndices.size() * sizeof(m_fullIndices.front()), &m_fullIndices.front(), GL_DYNAMIC_DRAW);
 
         // vertex attribute
         //-----------------
@@ -289,7 +268,7 @@ private:
         for (std::size_t x{ 0 }; x < m_subdivideX; ++x) {
             for (std::size_t y{ 0 }; y < m_subdivideY; ++y) {
                 // clang-format off
-                m_indices.insert(m_indices.end(), {
+                m_fullIndices.insert(m_fullIndices.end(), {
                     toFlatIndex(y, x),
                     toFlatIndex(y, x+1),
                     toFlatIndex(y+1, x+1),
