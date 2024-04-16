@@ -10,6 +10,7 @@
 #include <atomic>
 #include <cstddef>    // std::size_t
 #include <iostream>
+#include <mutex>
 
 // #define ENABLE_NORMAL
 
@@ -46,18 +47,16 @@ public:
     ~Plane() = default;
 
     // thread safe draw (LIE!)
-    void draw(bool shouldSwap = false)
+    void draw()
     {
-        std::size_t indicesSize{ m_indices_front.size() };
-
         if (m_shouldSwap) {
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-            glBufferData(GL_ELEMENT_ARRAY_BUFFER, m_indices_back.size() * sizeof(m_indices_back.front()), m_indices_back.data(), GL_DYNAMIC_DRAW);
-
-            indicesSize = m_indices_back.size();
-            m_indices_front.swap(m_indices_back);
+            std::scoped_lock lock{ m_mutex };
 
             m_shouldSwap = false;
+            m_indices_front.swap(m_indices_back);
+
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER, m_indices_front.size() * sizeof(m_indices_front.front()), m_indices_front.data(), GL_DYNAMIC_DRAW);
         }
 
         // bind buffer
@@ -65,6 +64,7 @@ public:
 
         // draw
         // glDrawArrays(GL_TRIANGLES, 0, std::size(m_interleavedVertices));
+        std::size_t indicesSize{ m_indices_front.size() };
         glDrawElements(GL_TRIANGLES, indicesSize, GL_UNSIGNED_INT, 0);
 
         // unbind buffer
@@ -93,6 +93,8 @@ public:
     template <typename __bool_like = bool>
     void customizeIndices(const std::vector<std::vector<__bool_like>>& condition, int xStart, int xEnd, int yStart, int yEnd)
     {
+        std::scoped_lock lock{ m_mutex };
+
         util::Timer timer{ "customizeIndices" };
 
         std::vector<unsigned int> indices;
@@ -209,6 +211,8 @@ private:
     std::vector<unsigned int> m_indices_front{};
     std::vector<unsigned int> m_indices_back{};
     std::atomic<bool>         m_shouldSwap{};
+
+    mutable std::mutex m_mutex;
 
     value_type m_texCoordsMultiplierX{ 1.0 };
     value_type m_texCoordsMultiplierY{ 1.0 };

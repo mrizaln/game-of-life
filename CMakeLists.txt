@@ -14,12 +14,22 @@ find_package(glad CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(stb CONFIG REQUIRED)
 find_package(PerlinNoise CONFIG REQUIRED)
+find_package(spdlog CONFIG REQUIRED)
+
+add_subdirectory(lib/sync-cpp) # emits sync-cpp link target
 
 # main
-add_executable(main source/main.cpp)
+add_executable(main source/main.cpp source/window.cpp source/window_manager.cpp)
 target_include_directories(main PUBLIC source)
-target_link_libraries(main PUBLIC glfw glad::glad glm::glm stb::stb
-                                  siv::PerlinNoise)
+target_link_libraries(
+  main
+  PUBLIC glfw
+         glad::glad
+         glm::glm
+         stb::stb
+         siv::PerlinNoise
+         spdlog::spdlog
+         sync-cpp)
 
 target_compile_options(main PRIVATE -fsanitize=thread)
 target_link_options(main PRIVATE -fsanitize=thread)

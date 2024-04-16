@@ -13,3 +13,4 @@ class Recipe(ConanFile):
         self.requires("glm/0.9.9.8")
         self.requires("stb/cci.20230920")
         self.requires("perlinnoise/3.0.0")
+        self.requires("spdlog/1.13.0")

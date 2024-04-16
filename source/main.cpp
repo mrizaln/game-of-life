@@ -2,9 +2,9 @@
 #include <sstream>
 #include <iostream>
 
+#include "renderer.hpp"
 #include "timer.hpp"
 #include "game.hpp"
-#include "render.hpp"
 
 int main(int argc, char** argv)
 {
@@ -55,23 +55,34 @@ int main(int argc, char** argv)
         std::stringstream ss{ std::string{ argv[6] } };
         ss >> print;
     }
-
     std::cout << "Creating and populating grid... ";
     Grid grid{ length, width };
     grid.populate(density);
     std::cout << "Done\n";
 
+    glfwInit();
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+    WindowManager::createInstance();
+    auto window = WindowManager::createWindow("Game of Life", 800, 600);
+    if (!window.has_value()) {
+        std::cerr << "Failed to create window";
+    }
+
     // enable timer print
     util::Timer::s_doPrint = print;
 
-    RenderEngine::simulation::pause = pause;
+    // limit the scope of Renderer so that it's destructor is called before glfwTerminate
+    {
+        window->setVsync(vsync);
+        window->useHere();
 
-    if (RenderEngine::initialize(grid, delay, vsync)) {
-        return -1;
+        Renderer renderer{ std::move(window).value(), grid, delay };
+        renderer.run();
     }
 
-    while (!RenderEngine::shouldClose()) {
-        RenderEngine::render();
-    }
-    RenderEngine::reset();
+    WindowManager::destroyInstance();
+    glfwTerminate();
 }
