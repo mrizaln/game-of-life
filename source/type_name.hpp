@@ -1,7 +1,7 @@
 #ifndef TYPE_NAME_HPP
 #define TYPE_NAME_HPP
 
-#include <string>
+#include <string_view>
 
 namespace util
 {

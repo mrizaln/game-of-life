@@ -1,7 +1,15 @@
 #ifndef RENDER_HPP
 #define RENDER_HPP
 
-// #define DEBUG
+#include "camera.hpp"
+#include "game.hpp"
+#include "grid_tile.hpp"
+#include "tile.hpp"
+#include "timer.hpp"
+#include "type_name.hpp"
+
+#include <glad/glad.h>
+#include <GLFW/glfw3.h>
 
 #include <algorithm>    // std::min, std::max
 #include <atomic>
@@ -9,26 +17,11 @@
 #include <cstddef>
 #include <exception>
 #include <iostream>
-#include <limits>
 #include <memory>
-#include <mutex>
-#include <stdexcept>
 #include <string>
 #include <system_error>
 #include <thread>
 #include <utility>
-#include <vector>
-
-#include <glad/glad.h>
-#include <GLFW/glfw3.h>
-
-#include <camera_header/camera.hpp>
-#include <tile/tile.hpp>
-#include <tile/grid_tile.hpp>
-#include <util/type_name.hpp>
-
-#include "./game.hpp"
-#include "util/timer.hpp"
 
 namespace RenderEngine
 {
@@ -142,8 +135,8 @@ namespace RenderEngine
         {
             std::optional<std::jthread> workerThread{ std::nullopt };
             std::atomic<bool>           done{ false };
+            std::atomic<bool>           doUpdate{ false };
             bool                        block{ true };
-            bool                        doUpdate{ false };
 
             void blockHere()
             {

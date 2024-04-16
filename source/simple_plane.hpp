@@ -1,10 +1,10 @@
 #ifndef SIMPLE_PLANE_HPP
 #define SIMPLE_PLANE_HPP
 
+#include <glad/glad.h>
+
 #include <cstddef>
 #include <iostream>
-
-#include <glad/glad.h>
 
 class SimplePlane
 {

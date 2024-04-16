@@ -4,6 +4,7 @@ Conway's Game of Life
 
 ## TODO
 
+- [ ] Restructure code
 - [ ] Fix data race
 
 Preview:

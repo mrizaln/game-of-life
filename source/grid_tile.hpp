@@ -1,21 +1,15 @@
 #ifndef GRID_TILE_H
 #define GRID_TILE_H
 
-#include <limits>
-#include <ranges>
-#include <optional>
+#include "shader.hpp"
+#include "texture.hpp"
+#include "plane.hpp"
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
-
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
-
-#include <shader_header/shader.hpp>
-#include <camera_header/camera.hpp>
-#include <texture_header/texture.hpp>
-#include <plane/plane.hpp>
 
 class GridTile
 {

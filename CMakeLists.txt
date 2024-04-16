@@ -16,8 +16,8 @@ find_package(stb CONFIG REQUIRED)
 find_package(PerlinNoise CONFIG REQUIRED)
 
 # main
-add_executable(main main.cpp)
-target_include_directories(main PUBLIC include)
+add_executable(main source/main.cpp)
+target_include_directories(main PUBLIC source)
 target_link_libraries(main PUBLIC glfw glad::glad glm::glm stb::stb
                                   siv::PerlinNoise)
 

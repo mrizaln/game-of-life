@@ -1,14 +1,14 @@
 #ifndef TEXTURE_HPP
 #define TEXTURE_HPP
 
+#include <glad/glad.h>    // include glad to get all the required OpenGL headers
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb/stb_image.h>
+
 #include <cstddef>    // std::size_t
 #include <iostream>
 #include <limits>    // std::numeric_limits
 #include <unordered_map>
-
-#include <glad/glad.h>    // include glad to get all the required OpenGL headers
-#define STB_IMAGE_IMPLEMENTATION
-#include <stb/stb_image.h>
 
 class Texture
 {

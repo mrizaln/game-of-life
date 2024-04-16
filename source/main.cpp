@@ -2,10 +2,9 @@
 #include <sstream>
 #include <iostream>
 
-#include <util/timer.hpp>
-
-#include "./game.hpp"
-#include "./render.hpp"
+#include "timer.hpp"
+#include "game.hpp"
+#include "render.hpp"
 
 int main(int argc, char** argv)
 {

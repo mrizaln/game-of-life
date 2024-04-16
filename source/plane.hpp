@@ -1,17 +1,15 @@
 #ifndef PLANE_HPP
 #define PLANE_HPP
 
-#include "util/timer.hpp"
-#include <algorithm>    // std::generate
-#include <array>
-#include <cstddef>    // std::size_t
-#include <iostream>
-#include <mutex>
-#include <optional>
-#include <thread>
-#include <vector>
+#include "timer.hpp"
 
 #include <glad/glad.h>
+
+#include <algorithm>    // std::generate
+#include <array>
+#include <atomic>
+#include <cstddef>    // std::size_t
+#include <iostream>
 
 // #define ENABLE_NORMAL
 
@@ -47,22 +45,20 @@ public:
 
     ~Plane() = default;
 
-    // thread safe draw
+    // thread safe draw (LIE!)
     void draw(bool shouldSwap = false)
     {
-        std::size_t indicesSize{ m_indices_custom_render->size() };
-        if (m_indices_custom_edit.has_value()) {
-            std::lock_guard lock{ m_mt };
+        std::size_t indicesSize{ m_indices_front.size() };
 
+        if (m_shouldSwap) {
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-            glBufferData(GL_ELEMENT_ARRAY_BUFFER, m_indices_custom_edit->size() * sizeof(m_indices_custom_edit->front()), &m_indices_custom_edit->front(), GL_DYNAMIC_DRAW);
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER, m_indices_back.size() * sizeof(m_indices_back.front()), m_indices_back.data(), GL_DYNAMIC_DRAW);
 
-            indicesSize             = m_indices_custom_edit->size();
-            m_indices_custom_render = std::move(m_indices_custom_edit);
-            m_indices_custom_edit.reset();
+            indicesSize = m_indices_back.size();
+            m_indices_front.swap(m_indices_back);
+
+            m_shouldSwap = false;
         }
-
-        // m_mt.lock();
 
         // bind buffer
         glBindVertexArray(VAO);
@@ -97,8 +93,7 @@ public:
     template <typename __bool_like = bool>
     void customizeIndices(const std::vector<std::vector<__bool_like>>& condition, int xStart, int xEnd, int yStart, int yEnd)
     {
-        util::Timer     timer{ "customizeIndices" };
-        std::lock_guard lock{ m_mt };
+        util::Timer timer{ "customizeIndices" };
 
         std::vector<unsigned int> indices;
 
@@ -125,15 +120,17 @@ public:
         // print(&indices);
 
         // print(&indices);
-        m_indices_custom_edit.reset();
-        m_indices_custom_edit = indices;
+        m_indices_back.clear();
+        m_indices_back = indices;
         // print(&m_indices_custom_edit.value());
+
+        m_shouldSwap = true;
     }
 
     void resetIndices()
     {
-        m_indices_custom_render.reset();
-        m_indices_custom_edit.reset();
+        m_indices_front.clear();
+        m_indices_back.clear();
         deleteBuffers();
         setBuffers();
     }
@@ -209,13 +206,12 @@ private:
     std::vector<unsigned int> m_indices;
     std::vector<value_type>   m_interleavedVertices;
 
-    std::optional<std::vector<unsigned int>> m_indices_custom_render{ std::nullopt };
-    std::optional<std::vector<unsigned int>> m_indices_custom_edit{ std::nullopt };
+    std::vector<unsigned int> m_indices_front{};
+    std::vector<unsigned int> m_indices_back{};
+    std::atomic<bool>         m_shouldSwap{};
 
     value_type m_texCoordsMultiplierX{ 1.0 };
     value_type m_texCoordsMultiplierY{ 1.0 };
-
-    mutable std::mutex m_mt;    // mutable: enable modification on const instantiation of class
 
     void setBuffers()
     {

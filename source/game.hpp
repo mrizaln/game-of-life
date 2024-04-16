@@ -1,7 +1,10 @@
 #ifndef GAME_HPP
 #define GAME_HPP
 
-#include "util/timer.hpp"
+#include "timer.hpp"
+
+#include <PerlinNoise.hpp>
+
 #include <algorithm>    // std::for_each
 #include <ctime>        // std::time
 #include <execution>    // std::execution
@@ -9,11 +12,8 @@
 #include <limits>
 #include <random>
 #include <stdexcept>
-#include <thread>
 #include <utility>    // std::pair
 #include <vector>
-
-#include <PerlinNoise.hpp>
 
 class Cell
 {
