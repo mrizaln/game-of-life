@@ -1,6 +1,5 @@
 #include "window.hpp"
 
-#include "timer.hpp"
 #include "window_manager.hpp"
 
 #define GLFW_INCLUDE_NONE
@@ -304,8 +303,6 @@ void Window::updateTitle(const std::string& title)
 void Window::run(std::function<void()>&& func)
 {
     for (std::scoped_lock lock{ m_windowMutex }; glfwWindowShouldClose(m_windowHandle) == 0;) {
-        util::Timer timer{ "Window::run [loop]" };
-
         updateDeltaTime();
         processInput();
         processQueuedTasks();
@@ -395,8 +392,6 @@ Window& Window::addKeyEventHandler(
 
 void Window::processInput()
 {
-    util::Timer timer{ "processInput" };
-
     // TODO: move this part to 'main thread' (glfwGetKey must be called from main thread [for now it's okay, idk
     // why tho])
     const auto getMods = [win = m_windowHandle] {
@@ -432,8 +427,6 @@ void Window::processInput()
 
 void Window::processQueuedTasks()
 {
-    util::Timer timer{ "processQueuedTasks" };
-
     decltype(m_taskQueue) taskQueue;
     {
         std::scoped_lock lock{ m_queueMutex };

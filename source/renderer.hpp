@@ -72,27 +72,27 @@ public:
             GL_LINEAR,
             GL_LINEAR,
             GL_REPEAT,
-            glm::vec3{ (float)grid.getLength() / 2.0f, (float)grid.getWidth() / 2.0f, 0.0f },    // pos
-            glm::vec3{ 1.0f, 1.0f, 1.0f },                                                       // color
-            glm::vec3{ grid.getLength(), grid.getWidth(), 0.0f },                                // scale
+            glm::vec3{ (float)grid.width() / 2.0f, (float)grid.height() / 2.0f, 0.0f },    // pos
+            glm::vec3{ 1.0f, 1.0f, 1.0f },                                                 // color
+            glm::vec3{ grid.width(), grid.height(), 0.0f },                                // scale
         }
         , m_gridTile{
-            grid.getLength(),                                                                    //
-            grid.getWidth(),                                                                     //
-            "./resources/shaders/gridShader.vert",                                               //
-            "./resources/shaders/gridShader.frag",                                               //
-            "./resources/textures/cell.png",                                                     //
-            GL_LINEAR,                                                                           //
-            GL_LINEAR,                                                                           //
-            GL_REPEAT,                                                                           //
-            glm::vec3{ (float)grid.getLength() / 2.0f, (float)grid.getWidth() / 2.0f, 0.0f },    // pos
-            glm::vec3{ 1.0f, 1.0f, 1.0f },                                                       // color
-            glm::vec3{ grid.getLength(), grid.getWidth(), 0.0f },                                // scale
+            grid.width(),                                                                  //
+            grid.height(),                                                                 //
+            "./resources/shaders/gridShader.vert",                                         //
+            "./resources/shaders/gridShader.frag",                                         //
+            "./resources/textures/cell.png",                                               //
+            GL_LINEAR,                                                                     //
+            GL_LINEAR,                                                                     //
+            GL_REPEAT,                                                                     //
+            glm::vec3{ (float)grid.width() / 2.0f, (float)grid.height() / 2.0f, 0.0f },    // pos
+            glm::vec3{ 1.0f, 1.0f, 1.0f },                                                 // color
+            glm::vec3{ grid.width(), grid.height(), 0.0f },                                // scale
         }
         , m_camera{}
         , m_gridMode{ GridMode::AUTO }
     {
-        m_borderTile.getPlane().multiplyTexCoords((float)grid.getLength(), (float)grid.getWidth());
+        m_borderTile.getPlane().multiplyTexCoords((float)grid.width(), (float)grid.height());
         m_camera.speed = 100.0f;
 
         const auto winProp        = window.getProperties();
@@ -101,8 +101,8 @@ public:
             .m_height = winProp.m_height,
         };
         m_cache.m_gridDimension = {
-            .m_width  = (int)grid.getLength(),    // might throw if first element not exist
-            .m_height = (int)grid.getWidth(),
+            .m_width  = (int)grid.width(),    // might throw if first element not exist
+            .m_height = (int)grid.height(),
         };
 
         resetCamera(true);
@@ -116,8 +116,8 @@ public:
             .m_height = winProp.m_height,
         };
         m_cache.m_gridDimension = {
-            .m_width  = (int)gridData.at(0).size(),    // might throw if first element not exist
-            .m_height = (int)gridData.size(),
+            .m_width  = (int)gridData.width(),    // might throw if first element not exist
+            .m_height = (int)gridData.height(),
         };
 
         if (isPaused) {
@@ -152,7 +152,7 @@ public:
 
         constexpr float offset{ 1.5f };
 
-        // culling (update currentBorder)
+        // culling
         // clang-format off
         const int rowLeftBorder  { static_cast<int>( xPos + left       - offset > 0      ? xPos + left   - offset : 0) };
         const int rowRightBorder { static_cast<int>( xPos + right + 1  + offset < width  ? xPos + right  + offset : width) };
@@ -160,7 +160,7 @@ public:
         const int colBottomBorder{ static_cast<int>( yPos + bottom + 1 - offset > 0      ? yPos + bottom - offset : 0) };
         // clang-format on
 
-        updateIndices({ rowLeftBorder, rowRightBorder, colBottomBorder, colTopBorder }, gridData);
+        updateGrid({ rowLeftBorder, rowRightBorder, colBottomBorder, colTopBorder }, gridData);
 
         // draw
         drawBorder(projMat, viewMat, isPaused);
@@ -296,10 +296,12 @@ private:
     GridMode m_gridMode;
     Cache    m_cache;
 
-    void updateIndices(const Border& border, const Grid::Grid_type& gridData)
+    void updateGrid(const Border& border, const Grid::Grid_type& gridData)
     {
         const auto& [x1, x2, y1, y2] = border;
-        m_gridTile.getPlane().customizeIndices(gridData, x1, x2, y1, y2);
+        m_gridTile.getPlane().customizeIndices(x1, x2, y1, y2, gridData, [](const Grid::Cell& cell) {
+            return cell == Grid::LIVE_STATE;
+        });
     }
 
     void drawBorder(const glm::mat4& projMat, const glm::mat4& viewMat, bool isPaused)

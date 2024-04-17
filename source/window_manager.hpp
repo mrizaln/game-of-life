@@ -8,7 +8,6 @@
 #include <chrono>
 #include <cstddef>
 #include <functional>
-#include <mutex>
 #include <optional>
 #include <queue>
 #include <thread>

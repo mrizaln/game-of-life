@@ -1,157 +1,119 @@
 #ifndef GAME_HPP
 #define GAME_HPP
 
-#include "timer.hpp"
+#include "unrolled_matrix.hpp"
 
 #include <PerlinNoise.hpp>
+#include <spdlog/spdlog.h>
 
-#include <algorithm>    // std::for_each
-#include <ctime>        // std::time
-#include <execution>    // std::execution
-#include <iostream>
-#include <limits>
+#include <cstdint>
+#include <ctime>
 #include <random>
-#include <stdexcept>
-#include <utility>    // std::pair
-#include <vector>
-
-class Cell
-{
-public:
-    inline static const bool s_dead_state = false;
-
-private:
-    bool m_state{};
-    bool m_state_next{};
-
-public:
-    Cell() = default;
-
-    constexpr auto isLive() const { return m_state; }
-    constexpr auto isDead() const { return !m_state; }
-    constexpr void setLive() { m_state_next = true; }     // won't be affected before update() has been called
-    constexpr void setDead() { m_state_next = false; }    // won't be affected before update() has been called
-
-    void update() { m_state = m_state_next; }
-
-    operator bool() const { return m_state; }
-};
+#include <utility>
 
 class Grid
 {
 public:
-    using Coord_type     = int;
-    using Grid_type      = std::vector<std::vector<Cell>>;    // X number of Cells inside Y number of vectors
-    using Grid_flat_type = std::vector<Cell>;
+    using Cell       = std::uint8_t;    // i'm planning on using all the range a byte offer
+    using Coord_type = int;
+    using Grid_type  = UnrolledMatrix<Cell>;    // X number of Cells inside Y number of vectors
 
-private:
-    Coord_type m_width{};     // Y
-    Coord_type m_length{};    // X
-    Grid_type  m_grid{};      // states
-
-    static int getRandomNumber(int min, int max)
+    enum class BufferType
     {
-        static std::mt19937 mt{ static_cast<std::mt19937::result_type>(std::time(nullptr)) };
-        return std::uniform_int_distribution{ min, max }(mt);
+        FRONT,
+        BACK
+    };
+
+    static constexpr Cell LIVE_STATE = 0xff;
+    static constexpr Cell DEAD_STATE = 0x00;
+
+    Grid(const Coord_type width, const Coord_type height)
+        : m_width{ width }
+        , m_height{ height }
+        , m_front{ width, height }
+        , m_back{ width, height }
+    {
+    }
+
+    Grid(const Grid& other)            = delete;
+    Grid& operator=(const Grid& other) = delete;
+    Grid(Grid&& other)                 = default;
+    Grid& operator=(Grid&& other)      = default;
+
+    template <typename T>
+    static T getRandomNumber(T min, T max)
+    {
+        thread_local static std::mt19937 mt{ static_cast<std::mt19937::result_type>(std::time(nullptr)) };
+        if constexpr (std::integral<T>) {
+            return std::uniform_int_distribution<T>{ min, max }(mt);
+        } else if constexpr (std::floating_point<T>) {
+            return std::uniform_real_distribution<T>{ min, max }(mt);
+        } else if constexpr (std::is_arithmetic_v<T>) {
+            auto real = std::uniform_real_distribution<>{ 0.0, 1.0 }(mt);
+            return min + real * (max - min);
+        } else {
+            static_assert(std::is_arithmetic_v<T>, "T must be an arithmetic type");
+        }
     }
 
     // 0 < probability < 1
     static bool getRandomBool(float probability)
     {
-        static std::mt19937 mt{ static_cast<std::mt19937::result_type>(std::time(nullptr)) };
+        thread_local static std::mt19937 mt{ static_cast<std::mt19937::result_type>(std::time(nullptr)) };
         return std::uniform_real_distribution<float>{}(mt) < probability;
     }
 
-    bool shouldSpawn(int x, int y, float probability)
-    {
-        static const siv::BasicPerlinNoise<float> perlin{ static_cast<siv::PerlinNoise::seed_type>(std::time(nullptr)) };
-        static const float                        freq{ 8.0f };
-        static const int                          octave{ 8 };
-
-        const float fx{ freq / m_length };
-        const float fy{ freq / m_width };
-
-        return perlin.octave2D_01(fx * x, fy * y, octave) < probability;
-    }
-
-public:
     // 0.0f < return < 1.0f
     static float getRandomProbability()
     {
-        return (getRandomNumber(0, std::numeric_limits<int>::max()) / static_cast<float>(std::numeric_limits<int>::max()));
+        return getRandomNumber(0.0f, 1.0f);
     }
 
-    Grid(const Coord_type length, const Coord_type width)
-        : m_width{ width }
-        , m_length{ length }
-        , m_grid{ std::vector<std::vector<Cell>>(width, std::vector<Cell>(length)) }
+    void populate(const float density = getRandomProbability())
     {
+        for (auto y : std::views::iota(0l, m_height)) {
+            for (auto x : std::views::iota(0l, m_width)) {
+                auto spawn   = shouldSpawn((int)x, (int)y, density) && getRandomBool(density);
+                m_back(x, y) = m_front(x, y) = spawn ? LIVE_STATE : DEAD_STATE;
+            }
+        }
     }
 
-    ~Grid() = default;
-
-    void populate(const float density)
+    void updateState()
     {
-        // for (auto& row : m_grid) {
-        for (Coord_type i{ 0 }; i < m_length; ++i) {
-            for (Coord_type j{ 0 }; j < m_width; ++j) {
-                auto& cell{ (*this)(i, j) };
-                // if (getRandomBool(density)) {
-                if (shouldSpawn(i, j, density) && getRandomBool(density)) {
-                    cell.setLive();
+        for (auto y : std::views::iota(0l, m_height)) {
+            for (auto x : std::views::iota(0l, m_width)) {
+                auto cell    = m_front(x, y);
+                auto neigbor = checkNeighbors((int)x, (int)y);
+
+                // clang-format off
+                if (cell == LIVE_STATE) {
+                    if      (neigbor <  2) { m_back(x, y) -= 1; }
+                    else if (neigbor <= 3) { m_back(x, y) = LIVE_STATE; }
+                    else                   { m_back(x, y) -= 1; }
                 } else {
-                    cell.setDead();
+                    if      (neigbor == 3) { m_back(x, y) = LIVE_STATE; }
+                    else                   { m_back(x, y) = (cell == 0 || cell - 1 == 0) ? DEAD_STATE : cell - 1; }
                 }
+                // clang-format on
             }
         }
-
-        // update
-        std::for_each(std::execution::par_unseq, m_grid.begin(), m_grid.end(), [&](std::vector<Cell>& row) {
-            std::for_each(std::execution::par_unseq, row.begin(), row.end(), [&](Cell& cell) { cell.update(); });
-        });
+        m_front.swap(m_back);
     }
 
-    Grid& updateState()
-    {
-        util::Timer timer{ "updateState" };
-
-        for (Coord_type i{ 0 }; i < m_length; ++i) {
-            for (Coord_type j{ 0 }; j < m_width; ++j) {
-                auto& cell{ (*this)(i, j) };
-
-                auto numberOfNeighbor{ checkNeighbors(i, j) };
-
-                if (cell.isLive()) {
-                    if (numberOfNeighbor < 2) {
-                        cell.setDead();
-                    } else if (numberOfNeighbor <= 3) {
-                        cell.setLive();
-                    } else {
-                        cell.setDead();
-                    }
-                } else if (numberOfNeighbor == 3) {
-                    cell.setLive();
-                }
-            }
-        }
-
-        // update
-        std::for_each(std::execution::par_unseq, m_grid.begin(), m_grid.end(), [&](std::vector<Cell>& row) {
-            std::for_each(std::execution::par_unseq, row.begin(), row.end(), [&](Cell& cell) { cell.update(); });
-        });
-
-        return *this;
-    }
-
+    // zeroes-out the grid
     void clear()
     {
-        // zeros
-        m_grid = std::vector<std::vector<Cell>>(m_width, std::vector<Cell>(m_length));
+        m_back = m_front = { m_width, m_height, DEAD_STATE };
     }
 
     // return the number of live neighbors
-    constexpr int checkNeighbors(const Coord_type xPos, const Coord_type yPos)
+    int checkNeighbors(const Coord_type xPos, const Coord_type yPos)
     {
+        auto checkState = [this](const Coord_type x, const Coord_type y) {
+            return (*this)(x, y) == LIVE_STATE;
+        };
+
         auto& x{ xPos };
         auto& y{ yPos };
 
@@ -171,117 +133,91 @@ public:
         );
     }
 
-    constexpr bool isInBound(const Coord_type xPos, const Coord_type yPos) const
+    bool isInBound(const Coord_type xPos, const Coord_type yPos) const
     {
-        return (
-            (xPos >= 0 && xPos < m_length)
-            && (yPos >= 0 && yPos < m_width)
-        );
+        return xPos >= 0 && xPos < m_width && yPos >= 0 && yPos < m_height;
     }
 
-    constexpr bool checkState(const Coord_type xPos, const Coord_type yPos) const
+    const Cell& get(const Coord_type xPos, const Coord_type yPos, BufferType type = BufferType::FRONT) const
     {
-        if (!isInBound(xPos, yPos)) {    // boundary condition: return dead state
-            // int effX{ xPos % m_length + 2 * (xPos < 0) - 1 };
-            // int effY{ yPos % m_width + 2 * (yPos < 0) - 1 };
-            // std::cout << m_length << '/' << m_width << ": ";
-            // std::cout << xPos << '/' << yPos << " -> ";
-            int effX{ (m_length + xPos % m_length) % m_length };    // following python behavior (surprisingly operator% behaves differently between python and cpp
-            int effY{ (m_width + yPos % m_width) % m_width };
-            // std::cout << effX << '/' << effY << '\n';
-
-            return (*this)(effX, effY).isLive();
-            // return Cell::s_dead_state;
+        // clang-format off
+        switch (type) {
+        case BufferType::FRONT: return m_front(xPos, yPos);
+        case BufferType::BACK:  return m_back(xPos, yPos);
         }
-
-        return (*this)(xPos, yPos).isLive();
+        // clang-format on
     }
 
-    constexpr bool checkState(const Cell& cell) const
+    // unchecked access
+    Cell& get(const Coord_type xPos, const Coord_type yPos, BufferType type = BufferType::FRONT)
     {
-        return cell.isLive();
+        return data(type)(xPos, yPos);
     }
 
-    const auto& data() const { return m_grid; }
-
-    // __return_cell_type can be anything as long as you provided the conversion function in pred.
-    // if __return_cell_type == bool, you can use data_flat_bool() instead
-    // if __return_cell_type == Cell, you can use data_flat_Cell() instead
-    template <typename __return_cell_type>
-    const auto data_flat(std::function<__return_cell_type(const Cell&)> pred) const
+    Cell& operator()(const Coord_type xPos, const Coord_type yPos)
     {
-        std::vector<__return_cell_type> vec;
-        for (std::size_t y{ 0 }; y < m_width; ++y) {
-            for (std::size_t x{ 0 }; x < m_length; ++x) {
-                vec.push_back(pred((*this)(x, y)));
-            }
-        };
-        return vec;
-    }
-
-    const auto data_flat_bool() const
-    {
-        std::vector<bool> vec;
-        for (std::size_t y{ 0 }; y < m_width; ++y) {
-            for (std::size_t x{ 0 }; x < m_length; ++x) {
-                vec.push_back(bool((*this)(x, y)));
-            }
+        // boundary condition: wrap-around
+        if (!isInBound(xPos, yPos)) {
+            int effX{ (m_width + yPos % m_width) % m_width };    // following python behavior of operator% (modulo)
+            int effY{ (m_height + xPos % m_height) % m_height };
+            return get(effX, effY);
         }
-        return vec;
+        return get(xPos, yPos);
     }
 
-    const auto data_flat_Cell() const
+    const Cell& operator()(const Coord_type xPos, const Coord_type yPos) const
     {
-        std::vector<bool> vec;
-        for (std::size_t y{ 0 }; y < m_width; ++y) {
-            for (std::size_t x{ 0 }; x < m_length; ++x) {
-                vec.push_back((*this)(x, y));
-            }
+        // boundary condition: wrap-around
+        if (!isInBound(xPos, yPos)) {
+            int effX{ (m_width + yPos % m_width) % m_width };    // following python behavior of operator% (modulo)
+            int effY{ (m_height + xPos % m_height) % m_height };
+            return get(effX, effY);
         }
-        return vec;
+        return get(xPos, yPos);
     }
 
-    auto&            getCell(int col, int row) { return (*this)(col, row); }
-    const auto&      getCell(int col, int row) const { return (*this)(col, row); }
-    const Coord_type getWidth() const { return m_width; }
-    const Coord_type getLength() const { return m_length; }
+    Grid_type& data(BufferType type = BufferType::FRONT)
+    {
+        // clang-format off
+        switch (type) {
+        case BufferType::FRONT: return m_front;
+        case BufferType::BACK:  return m_back;
+        }
+        // clang-format on
+    }
+
+    const Grid_type& data(BufferType type = BufferType::FRONT) const
+    {
+        // clang-format off
+        switch (type) {
+        case BufferType::FRONT: return m_front;
+        case BufferType::BACK: return m_back;
+        }
+        // clang-format on
+    }
+
+    Coord_type width() const { return m_width; }
+    Coord_type height() const { return m_height; }
 
     // return length, width
-    const std::pair<int, int> getDimension() const { return { m_length, m_width }; }
+    const std::pair<int, int> dimension() const { return { m_width, m_height }; }
 
-    constexpr Cell& operator()(const Coord_type xPos, const Coord_type yPos)
+private:
+    Coord_type m_width  = 0;
+    Coord_type m_height = 0;
+    Grid_type  m_front;    // this one is to be shown to the outside
+    Grid_type  m_back;     // updates done here
+
+    bool shouldSpawn(int x, int y, float probability)
     {
-        if (!isInBound(xPos, yPos)) {
-            throw std::out_of_range{ "out of range" };
-        }
+        static const siv::BasicPerlinNoise<float> perlin{ static_cast<siv::PerlinNoise::seed_type>(std::time(nullptr)) };
+        static const float                        freq{ 8.0f };
+        static const int                          octave{ 8 };
 
-        return m_grid[yPos][xPos];
-    }
-    constexpr const Cell& operator()(const Coord_type xPos, const Coord_type yPos) const
-    {
-        if (!isInBound(xPos, yPos)) {
-            throw std::range_error{ "out of range" };
-        }
+        const float fx{ freq / m_width };
+        const float fy{ freq / m_height };
 
-        return m_grid[yPos][xPos];
-    }
-
-    friend std::ostream& operator<<(std::ostream& out, const Grid& grid)
-    {
-        for (auto& row : grid.m_grid) {
-            for (auto& cell : row) {
-                switch (cell.isLive()) {
-                case true:
-                    std::cout << "█";
-                    break;
-                case false:
-                    std::cout << " ";
-                    break;
-                }
-            }
-            std::cout << '\n';
-        }
-        return out;
+        return perlin.octave2D_01(fx * (float)x, fy * (float)y, octave) < probability;
     }
 };
 

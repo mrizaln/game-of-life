@@ -1,14 +1,16 @@
 #ifndef PLANE_HPP
 #define PLANE_HPP
 
-#include "timer.hpp"
-
+#include "unrolled_matrix.hpp"
+#include <concepts>
 #include <glad/glad.h>
 
 #include <algorithm>    // std::generate
 #include <array>
 #include <cstddef>    // std::size_t
 #include <iostream>
+#include <span>
+#include <vector>
 
 // #define ENABLE_NORMAL
 
@@ -79,19 +81,24 @@ public:
     }
 
     // exclusive: [xStart, xEnd), [yStart, yEnd), return new indices,
-    // __bool_like: can convert implicitly to bool
-    template <typename __bool_like = bool>
-    void customizeIndices(const std::vector<std::vector<__bool_like>>& condition, int xStart, int xEnd, int yStart, int yEnd)
+    template <typename TT, std::invocable<const TT&> Func>
+        requires std::same_as<bool, std::invoke_result_t<Func, const TT&>>
+    void customizeIndices(
+        int                       xStart,
+        int                       xEnd,
+        int                       yStart,
+        int                       yEnd,
+        const UnrolledMatrix<TT>& reference,
+        Func&&                    comp
+    )
     {
-        util::Timer timer{ "customizeIndices" };
-
         std::vector<unsigned int> indices;
 
         // convert 2D coordinate to 1D indices with each 2D point corresponds to 6 points in 1D indices
         // std::cout << "\nIDX: ";
         for (int x{ xStart }; x < xEnd; ++x) {
             for (int y{ yStart }; y < yEnd; ++y) {
-                if (!condition[y][x]) {
+                if (!comp(reference(x, y))) {
                     continue;
                 }
 

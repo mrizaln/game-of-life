@@ -2,7 +2,6 @@
 #define SIMULATION_HPP_WHFEDHF3
 
 #include "game.hpp"
-#include "timer.hpp"
 
 #include <sync_cpp/sync.hpp>
 
@@ -44,14 +43,13 @@ public:
     {
         m_thread = std::jthread{ [this, fn = std::forward<Fn>(fn)](const std::stop_token& st) {
             while (!st.stop_requested()) {
-                util::Timer timer{ "Simulation::run [loop]" };
-                auto        tpsCounter{ m_tickRateCounter.update() };
+                auto tpsCounter{ m_tickRateCounter.update() };
 
-                m_grid.write([&](Grid& road) {
+                m_grid.write([&](Grid& grid) {
                     if (!m_paused) {
-                        road.updateState();
+                        grid.updateState();
                     }
-                    fn(road);
+                    fn(grid);
                 });
 
                 // sleep routine
@@ -111,7 +109,7 @@ private:
     class TickRateCounter
     {
     private:
-        struct [[nodiscard]] Inserter    // NOLINT
+        struct [[nodiscard]] Inserter
         {
             Inserter(TickRateCounter& counter)
                 : m_currTime{ std::chrono::steady_clock::now() }
@@ -132,14 +130,14 @@ private:
     private:
         void add(long time)
         {
-            m_tickRateHistory[m_index] = 1e9F / static_cast<float>(time);    // NOLINT
+            m_tickRateHistory[m_index] = 1e9F / static_cast<float>(time);
             m_index                    = (m_index + 1) % m_tickRateHistory.size();
 
             m_tickRate = std::accumulate(m_tickRateHistory.begin(), m_tickRateHistory.end(), 0.0F)
                          / static_cast<float>(m_tickRateHistory.size());
         }
 
-        std::array<float, 8> m_tickRateHistory{ 0 };    // NOLINT
+        std::array<float, 8> m_tickRateHistory{ 0 };
         std::atomic<float>   m_tickRate{ 0 };
         std::size_t          m_index{ 0 };
     };

@@ -67,11 +67,11 @@ public:
         const glm::vec3& scale        = { 1.0f, 1.0f, 1.0f }
     )
         : m_plane{ width }
-        , m_shader{ vShaderDir, fShaderDir }
         , m_texture{ textureDir, texMagFilter, texMinFilter, wrapFilter }
         , m_position{ position }
-        , m_color{ color }
         , m_scale{ scale }
+        , m_color{ color }
+        , m_shader{ vShaderDir, fShaderDir }
     {
     }
 

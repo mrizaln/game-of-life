@@ -217,9 +217,7 @@ private:
                     m_simulation.write([this, x, y](Grid& grid) {
                         m_interp.interpolate(x, y, [&](int col, int row) {
                             if (grid.isInBound(col, row)) {
-                                auto& cell{ grid.getCell(col, row) };
-                                cell.setLive();
-                                cell.update();
+                                grid.get(col, row) = Grid::LIVE_STATE;
                             };
                         });
                     });
@@ -230,9 +228,7 @@ private:
                     m_simulation.write([this, x, y](Grid& grid) {
                         m_interp.interpolate(x, y, [&](int col, int row) {
                             if (grid.isInBound(col, row)) {
-                                auto& cell{ grid.getCell(col, row) };
-                                cell.setDead();
-                                cell.update();
+                                grid.get(col, row) = Grid::DEAD_STATE;
                             };
                         });
                     });
@@ -272,9 +268,7 @@ private:
 
                 m_simulation.write([x, y](Grid& grid) {
                     if (grid.isInBound(x, y)) {
-                        auto& cell{ grid.getCell(x, y) };
-                        cell.setLive();
-                        cell.update();
+                        grid.get(x, y) = Grid::LIVE_STATE;
                     };
                 });
                 m_interp = InterpolationHelper{ x, y };
@@ -289,9 +283,7 @@ private:
 
                 m_simulation.write([x, y](Grid& grid) {
                     if (grid.isInBound(x, y)) {
-                        auto& cell{ grid.getCell(x, y) };
-                        cell.setDead();
-                        cell.update();
+                        grid.get(x, y) = Grid::DEAD_STATE;
                     };
                 });
                 m_interp = InterpolationHelper{ x, y };
@@ -365,7 +357,9 @@ private:
 
         // force update (if paused, do nothing instead)
         w.addKeyEventHandler(GLFW_KEY_U, 0, A::CALLBACK, [this](Window&) {
-            m_simulation.wakeUp();
+            if (m_simulation.isPaused()) {
+                m_simulation.write(&Grid::updateState);
+            }
         });
 
         // fit grid to window
