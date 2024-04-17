@@ -2,12 +2,12 @@
 #define SHADER_HPP
 
 #include <fstream>
-#include <iostream>
 #include <sstream>
 #include <string>
 
 #include <glad/glad.h>    // include glad to get all the required OpenGL headers
 #include <glm/glm.hpp>
+#include <spdlog/spdlog.h>
 
 class Shader
 {
@@ -63,7 +63,7 @@ public:
             vertexCode   = vShaderStream.str();
             fragmentCode = fShaderStream.str();
         } catch (std::ifstream::failure e) {
-            std::cerr << "ERROR::SHADER::FILE_NOT_SUCCESSFULLY_READ" << std::endl;
+            spdlog::error("(Shader) Shader file not successfully read");
         }
         const char* vShaderCode{ vertexCode.c_str() };
         const char* fShaderCode{ fragmentCode.c_str() };
@@ -180,16 +180,12 @@ private:
         if (type != "PROGRAM") {
             glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
             if (!success) {
-                glGetShaderInfoLog(shader, 1024, NULL, infoLog);
-                std::cerr << "ERROR::SHADER_COMPILATION_ERROR of type: " << type << '\n'
-                          << infoLog << std::endl;
+                spdlog::error("(Shader) Shader compilation error ({}): {}", type, infoLog);
             }
         } else {
             glGetProgramiv(shader, GL_LINK_STATUS, &success);
             if (!success) {
-                glGetProgramInfoLog(shader, 1024, NULL, infoLog);
-                std::cerr << "ERROR::PROGRAM_LINKING_ERROR of type: " << type << '\n'
-                          << infoLog << std::endl;
+                spdlog::error("(Shader) Shader linking error ({}): {}", type, infoLog);
             }
         }
     }

@@ -2,14 +2,12 @@
 #define PLANE_HPP
 
 #include "unrolled_matrix.hpp"
-#include <concepts>
 #include <glad/glad.h>
 
 #include <algorithm>    // std::generate
 #include <array>
+#include <concepts>
 #include <cstddef>    // std::size_t
-#include <iostream>
-#include <span>
 #include <vector>
 
 // #define ENABLE_NORMAL
@@ -34,14 +32,12 @@ public:
             m_texCoordsMultiplierX = static_cast<value_type>(xSides);
             m_texCoordsMultiplierY = static_cast<value_type>(ySides);
         }
-        std::cout << "Generating plane... ";
         generateVerticesAndIndices();
         buildInterleavedVertices();
 
         if (generateBuffers) {
             setBuffers();
         }
-        std::cout << "Done\n";
     }
 
     ~Plane() = default;
@@ -95,7 +91,6 @@ public:
         std::vector<unsigned int> indices;
 
         // convert 2D coordinate to 1D indices with each 2D point corresponds to 6 points in 1D indices
-        // std::cout << "\nIDX: ";
         for (int x{ xStart }; x < xEnd; ++x) {
             for (int y{ yStart }; y < yEnd; ++y) {
                 if (!comp(reference(x, y))) {
@@ -103,7 +98,6 @@ public:
                 }
 
                 auto idx{ (x * m_subdivideY + y) * 6 };
-                // std::cout << idx <<  ';
 
                 indices.push_back(m_fullIndices[idx++]);
                 indices.push_back(m_fullIndices[idx++]);
@@ -113,12 +107,8 @@ public:
                 indices.push_back(m_fullIndices[idx++]);
             }
         }
-        // std::cout << '\n';
-        // print(&indices);
 
-        // print(&indices);
         m_shownIndices = indices;
-        // print(&m_indices_custom_edit.value());
     }
 
     void resetIndices()
@@ -131,31 +121,6 @@ public:
     const std::pair<int, int> getSubdivision() const
     {
         return { m_subdivideX, m_subdivideY };
-    }
-
-    void print(const std::vector<unsigned int>* indices = nullptr) const
-    {
-        auto _cout_old_state{ std::cout.flags() };
-
-        // std::cout << "\nInterleavedVertices:\n";
-        // auto& v{ m_interleavedVertices };
-        // for (std::size_t i{ 0 }; i < std::size(m_interleavedVertices); i += 8) {
-        //     std::cout << std::fixed << std::setprecision(2) << std::showpos
-        //               << v[i] << '\t' << v[i + 1] << '\t' << v[i + 2] << "\t\t"
-        //               << v[i + 3] << '\t' << v[i + 4] << '\t' << v[i + 5] << "\t\t"
-        //               << v[i + 6] << '\t' << v[i + 7] << '\n';
-        // }
-
-        std::cout << "\nIndices:\n";
-        const auto& ind{ indices ? *indices : m_fullIndices };
-        for (std::size_t i{ 0 }; i < ind.size(); ++i) {
-            std::cout << ind[i] << '\t';
-            if ((i + 1) % 6 == 0) {
-                std::cout << '\n';
-            }
-        }
-
-        std::cout.flags(_cout_old_state);
     }
 
 private:
@@ -307,7 +272,6 @@ private:
             m_interleavedVertices.push_back(normal[2]);
 #endif
         }
-        // this->print();
     }
 };
 

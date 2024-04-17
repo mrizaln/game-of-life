@@ -8,6 +8,7 @@
 #include "simulation.hpp"
 #include "window.hpp"
 #include "window_manager.hpp"
+#include <stdexcept>
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -41,9 +42,9 @@ public:
     Application& operator=(Application&&)      = delete;
 
     Application(InitParam param)
-        : m_simulation({ param.m_gridWidth, param.m_gridHeight }, param.m_delay)
-        , m_window{}
-        , m_renderer{}
+        : m_simulation{ param.m_gridWidth, param.m_gridHeight, param.m_delay }
+        , m_window{ std::nullopt }
+        , m_renderer{ std::nullopt }
         , m_interp{ -1, -1 }
     {
         glfwInit();
@@ -54,7 +55,8 @@ public:
         WindowManager::createInstance();
         m_window = WindowManager::createWindow(s_defaultTitle.data(), 800, 600);
         if (!m_window.has_value()) {
-            std::cerr << "Failed to create window";
+            spdlog::critical("(Application) Failed to create window");
+            throw std::runtime_error { "Failed to create window" };
         }
         m_window->useHere();
         m_window->setVsync(param.m_vsync);

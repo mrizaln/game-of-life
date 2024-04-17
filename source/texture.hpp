@@ -3,10 +3,10 @@
 
 #include <glad/glad.h>    // include glad to get all the required OpenGL headers
 #define STB_IMAGE_IMPLEMENTATION
+#include <spdlog/spdlog.h>
 #include <stb/stb_image.h>
 
 #include <cstddef>    // std::size_t
-#include <iostream>
 #include <limits>    // std::numeric_limits
 #include <unordered_map>
 
@@ -83,9 +83,9 @@ public:
         textureUnitNum = s_textureUnitCount++;
 
         if (!imageData) {
-            std::cerr << "Failed to load texture: " << (void*)imageData << '\n';
+            spdlog::error("(Texture) failed to load texture from colorData");
         } else {
-            std::cerr << "Successfully load texture from colorData (" << textureUnitNum << ")\n";
+            spdlog::info("(Shader) Successfully loaded texture from colorData ({})", textureUnitNum);
             generateTexture(minFilter, magFilter, wrap);
         }
     }
@@ -104,9 +104,9 @@ public:
         imageData = stbi_load(texFilePath, &imageWidth, &imageHeight, &nrChannels, 0);
 
         if (!imageData) {
-            std::cerr << "Failed to load texture: " << texFilePath << '\n';
+            spdlog::error("(Texture) failed to load texture from '{}'", texFilePath);
         } else {
-            std::cerr << "Successfully load texture: " << texFilePath << " (" << textureUnitNum << ")\n";
+            spdlog::info("(Shader) Successfully loaded texture from '{}' ({})", texFilePath, textureUnitNum);
             generateTexture(minFilter, magFilter, wrap);
         }
 

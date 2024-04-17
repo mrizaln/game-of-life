@@ -4,7 +4,7 @@
 #include <glad/glad.h>
 
 #include <cstddef>
-#include <iostream>
+#include <iterator>
 
 class SimplePlane
 {
@@ -108,17 +108,6 @@ public:
         setBuffers();
     }
 
-    void print() const
-    {
-        auto& v{ m_interleavedVertices };
-        for (std::size_t i{ 0 }; i < std::size(m_interleavedVertices); i += 8) {
-            std::cout.precision(2);
-            std::cout << v[i] << '\t' << v[i + 1] << '\t' << v[i + 2] << "\t\t"
-                      << v[i + 3] << '\t' << v[i + 4] << '\t' << v[i + 5] << "\t\t"
-                      << v[i + 6] << '\t' << v[i + 7] << '\n';
-        }
-    }
-
 private:
     void buildInterleavedVertices()
     {
@@ -134,8 +123,6 @@ private:
             m_interleavedVertices[i + 6] = m_texCoords[l];
             m_interleavedVertices[i + 7] = m_texCoords[l + 1];
         }
-
-        // this->print();
     }
 
     void setBuffers()

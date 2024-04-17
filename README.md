@@ -9,7 +9,7 @@ Conway's Game of Life
 - [x] Fix argument parsing
 - [ ] Implement queue for `Simulation` to avoid contention when trying to access object inside it
 - [ ] Add trailing effect (draw previously live cell as dimmer version of currently live)
-- [ ] Parallelize the state update
+- [x] Parallelize the state update
 
 Preview:
 

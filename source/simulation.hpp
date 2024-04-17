@@ -18,10 +18,11 @@ public:
     using Duration = std::chrono::milliseconds;
 
     Simulation(
-        Grid&&      grid,
-        std::size_t delay
+        Grid::Coord_type gridWidth,
+        Grid::Coord_type gridHeight,
+        std::size_t      delay
     )
-        : m_grid{ m_mutex, std::move(grid) }
+        : m_grid{ m_mutex, gridWidth, gridHeight }
         , m_delay{ delay }
         , m_ignoreDelay{ false }
         , m_paused{ false }

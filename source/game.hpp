@@ -1,6 +1,7 @@
 #ifndef GAME_HPP
 #define GAME_HPP
 
+#include "threadpool.hpp"
 #include "unrolled_matrix.hpp"
 
 #include <PerlinNoise.hpp>
@@ -32,13 +33,14 @@ public:
         , m_height{ height }
         , m_front{ width, height }
         , m_back{ width, height }
+        , m_threadPool{ std::thread::hardware_concurrency() }
     {
     }
 
     Grid(const Grid& other)            = delete;
     Grid& operator=(const Grid& other) = delete;
-    Grid(Grid&& other)                 = default;
-    Grid& operator=(Grid&& other)      = default;
+    Grid(Grid&& other)                 = delete;
+    Grid& operator=(Grid&& other)      = delete;
 
     template <typename T>
     static T getRandomNumber(T min, T max)
@@ -81,23 +83,48 @@ public:
 
     void updateState()
     {
-        for (auto y : std::views::iota(0l, m_height)) {
-            for (auto x : std::views::iota(0l, m_width)) {
-                auto cell    = m_front(x, y);
-                auto neigbor = checkNeighbors((int)x, (int)y);
+        const auto concurrencyLevel = m_threadPool.size();
+        const auto chunkSize        = m_height / (long)concurrencyLevel;
 
-                // clang-format off
-                if (cell == LIVE_STATE) {
-                    if      (neigbor <  2) { m_back(x, y) -= 1; }
-                    else if (neigbor <= 3) { m_back(x, y) = LIVE_STATE; }
-                    else                   { m_back(x, y) -= 1; }
-                } else {
-                    if      (neigbor == 3) { m_back(x, y) = LIVE_STATE; }
-                    else                   { m_back(x, y) = (cell == 0 || cell - 1 == 0) ? DEAD_STATE : cell - 1; }
+        std::vector<std::future<void>> futures;
+        futures.reserve(concurrencyLevel);
+
+        // interleaved update
+        for (auto i : std::views::iota(0l, (long)concurrencyLevel)) {
+            const auto numSteps = [&] {
+                const auto maxSize = chunkSize * (long)concurrencyLevel + i;
+                if (maxSize < m_height) {
+                    return chunkSize + 1;
                 }
-                // clang-format on
-            }
+                return chunkSize;
+            }();
+
+            futures.emplace_back(m_threadPool.enqueue([=, this] {
+                for (auto count : std::views::iota(0l, numSteps)) {
+                    const auto y = count * (int)concurrencyLevel + i;
+                    for (auto x : std::views::iota(0, m_width)) {
+                        auto cell    = m_front(x, y);
+                        auto neigbor = checkNeighbors((int)x, (int)y);
+
+                        // clang-format off
+                        if (cell == LIVE_STATE) {
+                            if      (neigbor <  2) { m_back(x, y) -= 1; }
+                            else if (neigbor <= 3) { m_back(x, y) = LIVE_STATE; }
+                            else                   { m_back(x, y) -= 1; }
+                        } else {
+                            if      (neigbor == 3) { m_back(x, y) = LIVE_STATE; }
+                            else                   { m_back(x, y) = (cell == 0 || cell - 1 == 0) ? DEAD_STATE : cell - 1; }
+                        }
+                        // clang-format on
+                    }
+                }
+            }));
         }
+
+        for (auto& future : futures) {
+            future.get();
+        }
+
         m_front.swap(m_back);
     }
 
@@ -108,7 +135,7 @@ public:
     }
 
     // return the number of live neighbors
-    int checkNeighbors(const Coord_type xPos, const Coord_type yPos)
+    int checkNeighbors(const Coord_type xPos, const Coord_type yPos) const
     {
         auto checkState = [this](const Coord_type x, const Coord_type y) {
             return (*this)(x, y) == LIVE_STATE;
@@ -207,6 +234,7 @@ private:
     Coord_type m_height = 0;
     Grid_type  m_front;    // this one is to be shown to the outside
     Grid_type  m_back;     // updates done here
+    ThreadPool m_threadPool;
 
     bool shouldSpawn(int x, int y, float probability)
     {
