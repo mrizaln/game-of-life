@@ -7,9 +7,13 @@
 #include <PerlinNoise.hpp>
 #include <spdlog/spdlog.h>
 
+#include <algorithm>
+#include <concepts>
 #include <cstdint>
 #include <ctime>
+#include <map>
 #include <random>
+#include <ranges>
 #include <utility>
 
 class Grid
@@ -25,16 +29,37 @@ public:
         BACK
     };
 
+    enum class UpdateStrategy
+    {
+        INTERLEAVED,
+        CHUNKED,
+    };
+
     static constexpr Cell LIVE_STATE = 0xff;
     static constexpr Cell DEAD_STATE = 0x00;
 
-    Grid(const Coord_type width, const Coord_type height)
-        : m_width{ width }
-        , m_height{ height }
-        , m_front{ width, height }
+    static inline const std::map<std::string, UpdateStrategy> s_updateStrategyMap{
+        { "interleaved", UpdateStrategy::INTERLEAVED },
+        { "chunked", UpdateStrategy::CHUNKED }
+    };
+
+    Grid(const Coord_type width, const Coord_type height, UpdateStrategy updateStrategy)
+        : m_front{ width, height }
         , m_back{ width, height }
         , m_threadPool{ std::thread::hardware_concurrency() }
+        , m_width{ width }
+        , m_height{ height }
+        , m_updateStrategy{ updateStrategy }
     {
+        spdlog::info("(Grid) Created with width: [{}], height: [{}]", width, height);
+        spdlog::info("(Grid) Using update strategy: [{}]", [&] {
+            for (const auto& [key, value] : s_updateStrategyMap) {
+                if (value == updateStrategy) {
+                    return key;
+                }
+            }
+            return std::string{ "unknown" };    // this should never happen
+        }());
     }
 
     Grid(const Grid& other)            = delete;
@@ -73,57 +98,29 @@ public:
 
     void populate(const float density = getRandomProbability())
     {
-        for (auto y : std::views::iota(0l, m_height)) {
-            for (auto x : std::views::iota(0l, m_width)) {
-                auto spawn   = shouldSpawn((int)x, (int)y, density) && getRandomBool(density);
-                m_back(x, y) = m_front(x, y) = spawn ? LIVE_STATE : DEAD_STATE;
-            }
-        }
+        process_multi([&](long x, long y) {
+            auto spawn   = shouldSpawn((int)x, (int)y, density) && getRandomBool(density);
+            m_back(x, y) = m_front(x, y) = spawn ? LIVE_STATE : DEAD_STATE;
+        });
     }
 
     void updateState()
     {
-        const auto concurrencyLevel = m_threadPool.size();
-        const auto chunkSize        = m_height / (long)concurrencyLevel;
+        process_multi([this](long x, long y) {
+            auto cell    = m_front(x, y);
+            auto neigbor = checkNeighbors((int)x, (int)y);
 
-        std::vector<std::future<void>> futures;
-        futures.reserve(concurrencyLevel);
-
-        // interleaved update
-        for (auto i : std::views::iota(0l, (long)concurrencyLevel)) {
-            const auto numSteps = [&] {
-                const auto maxSize = chunkSize * (long)concurrencyLevel + i;
-                if (maxSize < m_height) {
-                    return chunkSize + 1;
-                }
-                return chunkSize;
-            }();
-
-            futures.emplace_back(m_threadPool.enqueue([=, this] {
-                for (auto count : std::views::iota(0l, numSteps)) {
-                    const auto y = count * (int)concurrencyLevel + i;
-                    for (auto x : std::views::iota(0, m_width)) {
-                        auto cell    = m_front(x, y);
-                        auto neigbor = checkNeighbors((int)x, (int)y);
-
-                        // clang-format off
-                        if (cell == LIVE_STATE) {
-                            if      (neigbor <  2) { m_back(x, y) -= 1; }
-                            else if (neigbor <= 3) { m_back(x, y) = LIVE_STATE; }
-                            else                   { m_back(x, y) -= 1; }
-                        } else {
-                            if      (neigbor == 3) { m_back(x, y) = LIVE_STATE; }
-                            else                   { m_back(x, y) = (cell == 0 || cell - 1 == 0) ? DEAD_STATE : cell - 1; }
-                        }
-                        // clang-format on
-                    }
-                }
-            }));
-        }
-
-        for (auto& future : futures) {
-            future.get();
-        }
+            // clang-format off
+            if (cell == LIVE_STATE) {
+                if      (neigbor <  2) { m_back(x, y) -= 1; }
+                else if (neigbor <= 3) { m_back(x, y) = LIVE_STATE; }
+                else                   { m_back(x, y) -= 1; }
+            } else {
+                if      (neigbor == 3) { m_back(x, y) = LIVE_STATE; }
+                else                   { m_back(x, y) = (cell == 0 || cell - 1 == 0) ? DEAD_STATE : cell - 1; }
+            }
+            // clang-format on
+        });
 
         m_front.swap(m_back);
     }
@@ -167,18 +164,22 @@ public:
 
     const Cell& get(const Coord_type xPos, const Coord_type yPos, BufferType type = BufferType::FRONT) const
     {
-        // clang-format off
         switch (type) {
-        case BufferType::FRONT: return m_front(xPos, yPos);
-        case BufferType::BACK:  return m_back(xPos, yPos);
+        case BufferType::FRONT:
+            return m_front(xPos, yPos);
+        case BufferType::BACK:
+            return m_back(xPos, yPos);
         }
-        // clang-format on
     }
 
-    // unchecked access
     Cell& get(const Coord_type xPos, const Coord_type yPos, BufferType type = BufferType::FRONT)
     {
-        return data(type)(xPos, yPos);
+        switch (type) {
+        case BufferType::FRONT:
+            return m_front(xPos, yPos);
+        case BufferType::BACK:
+            return m_back(xPos, yPos);
+        }
     }
 
     Cell& operator()(const Coord_type xPos, const Coord_type yPos)
@@ -205,22 +206,22 @@ public:
 
     Grid_type& data(BufferType type = BufferType::FRONT)
     {
-        // clang-format off
         switch (type) {
-        case BufferType::FRONT: return m_front;
-        case BufferType::BACK:  return m_back;
+        case BufferType::FRONT:
+            return m_front;
+        case BufferType::BACK:
+            return m_back;
         }
-        // clang-format on
     }
 
     const Grid_type& data(BufferType type = BufferType::FRONT) const
     {
-        // clang-format off
         switch (type) {
-        case BufferType::FRONT: return m_front;
-        case BufferType::BACK: return m_back;
+        case BufferType::FRONT:
+            return m_front;
+        case BufferType::BACK:
+            return m_back;
         }
-        // clang-format on
     }
 
     Coord_type width() const { return m_width; }
@@ -230,22 +231,96 @@ public:
     const std::pair<int, int> dimension() const { return { m_width, m_height }; }
 
 private:
-    Coord_type m_width  = 0;
-    Coord_type m_height = 0;
-    Grid_type  m_front;    // this one is to be shown to the outside
-    Grid_type  m_back;     // updates done here
-    ThreadPool m_threadPool;
+    Grid_type      m_front;    // this one is to be shown to the outside
+    Grid_type      m_back;     // updates done here
+    ThreadPool     m_threadPool;
+    Coord_type     m_width          = 0;
+    Coord_type     m_height         = 0;
+    UpdateStrategy m_updateStrategy = UpdateStrategy::INTERLEAVED;
 
-    bool shouldSpawn(int x, int y, float probability)
+    siv::BasicPerlinNoise<float> m_perlin{ static_cast<siv::PerlinNoise::seed_type>(std::time(nullptr)) };
+    float                        m_perlinFreq   = 8.0f;
+    int                          m_perlinOctave = 8;
+
+    bool shouldSpawn(int x, int y, float probability) const
     {
-        static const siv::BasicPerlinNoise<float> perlin{ static_cast<siv::PerlinNoise::seed_type>(std::time(nullptr)) };
-        static const float                        freq{ 8.0f };
-        static const int                          octave{ 8 };
+        const float fx{ m_perlinFreq / m_width };
+        const float fy{ m_perlinFreq / m_height };
 
-        const float fx{ freq / m_width };
-        const float fy{ freq / m_height };
+        return m_perlin.octave2D_01(fx * (float)x, fy * (float)y, m_perlinOctave) < probability;
+    }
 
-        return perlin.octave2D_01(fx * (float)x, fy * (float)y, octave) < probability;
+    // process the grid in parallel
+    void process_multi(std::invocable<long, long> auto&& func)
+    {
+        switch (m_updateStrategy) {
+        case UpdateStrategy::INTERLEAVED:
+            processInterleaved(std::forward<decltype(func)>(func));
+            break;
+        case UpdateStrategy::CHUNKED:
+            processChunked(std::forward<decltype(func)>(func));
+            break;
+        }
+    }
+
+    void processInterleaved(std::invocable<long, long> auto&& func)
+    {
+        const auto concurrencyLevel = m_threadPool.size();
+        const auto chunkSize        = m_height / (long)concurrencyLevel;
+
+        std::vector<std::future<void>> futures;
+        futures.reserve(concurrencyLevel);
+
+        // interleaved update
+        for (auto i : std::views::iota(0l, (long)concurrencyLevel)) {
+            const auto numSteps = [&] {
+                const auto maxSize = chunkSize * (long)concurrencyLevel + i;
+                if (maxSize < m_height) {
+                    return chunkSize + 1;
+                }
+                return chunkSize;
+            }();
+
+            futures.emplace_back(m_threadPool.enqueue([=, this] {
+                for (auto count : std::views::iota(0l, numSteps)) {
+                    const auto y = count * (int)concurrencyLevel + i;
+                    for (auto x : std::views::iota(0l, m_width)) {
+                        func(x, y);
+                    }
+                }
+            }));
+        }
+
+        for (auto& future : futures) {
+            future.get();
+        }
+    }
+
+    void processChunked(std::invocable<long, long> auto&& func)
+    {
+        const auto concurrencyLevel = std::min((long)m_threadPool.size(), (long)m_height);    // make sure at least 1
+        const auto chunkSize        = m_height / concurrencyLevel;
+
+        std::vector<std::future<void>> futures;
+        futures.reserve((std::size_t)concurrencyLevel);
+
+        // chunked update
+        for (auto i : std::views::iota(0l, concurrencyLevel)) {
+            const auto chunkBegin = i * chunkSize;
+            const auto chunkEnd   = std::min(chunkBegin + chunkSize, (long)m_height);
+
+            futures.emplace_back(m_threadPool.enqueue([=, this] {
+                for (auto y : std::views::iota(chunkBegin, chunkEnd)) {
+                    for (auto x : std::views::iota(0l, m_width)) {
+                        func(x, y);
+                    }
+                }
+            }));
+        }
+
+        for (auto& future : futures) {
+            future.get();
+        }
     }
 };
 

@@ -18,11 +18,12 @@ public:
     using Duration = std::chrono::milliseconds;
 
     Simulation(
-        Grid::Coord_type gridWidth,
-        Grid::Coord_type gridHeight,
-        std::size_t      delay
+        Grid::Coord_type     gridWidth,
+        Grid::Coord_type     gridHeight,
+        Grid::UpdateStrategy updateStrategy,
+        std::size_t          delay
     )
-        : m_grid{ m_mutex, gridWidth, gridHeight }
+        : m_grid{ m_mutex, gridWidth, gridHeight, updateStrategy }
         , m_delay{ delay }
         , m_ignoreDelay{ false }
         , m_paused{ false }
@@ -63,6 +64,14 @@ public:
                 }
             }
         } };
+    }
+
+    void forceUpdate()
+    {
+        wakeUp();
+        if (m_paused) {
+            m_grid.write(&Grid::updateState);
+        }
     }
 
     // wake up the thread if the thread is sleeping

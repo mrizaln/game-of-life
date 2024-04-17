@@ -1,4 +1,5 @@
 #include "application.hpp"
+#include "game.hpp"
 
 #include <CLI/CLI.hpp>
 #include <GLFW/glfw3.h>
@@ -11,13 +12,14 @@ int main(int argc, char** argv)
 {
     CLI::App app{ "Conway's game of life simulation renderer" };
 
-    int   length  = 360;
-    int   width   = 480;
-    float delay   = 1e-5f;
-    float density = 0.3f;
-    bool  pause   = false;
-    bool  noVsync = false;
-    bool  debug   = false;
+    int   length   = 360;
+    int   width    = 480;
+    float delay    = 1e-5f;
+    float density  = 0.3f;
+    bool  pause    = false;
+    bool  noVsync  = false;
+    bool  debug    = false;
+    auto  strategy = Grid::UpdateStrategy::INTERLEAVED;
 
     app.add_option("-l,--length", length, "The length of the world grid")->required(true);
     app.add_option("-w,--width", width, "The width of the world grid")->required(true);
@@ -27,6 +29,9 @@ int main(int argc, char** argv)
     app.add_flag("--no-vsync", noVsync, "Turn off vsync");
     app.add_flag("--debug", debug, "Print debugging info");
 
+    app.add_option("--update-strategy", strategy, "The strategy to be used on updates (multithreaded)")
+        ->transform(CLI::CheckedTransformer(Grid::s_updateStrategyMap, CLI::ignore_case));
+
     CLI11_PARSE(app, argc, argv);
 
     if (debug) {
@@ -35,13 +40,14 @@ int main(int argc, char** argv)
 
     // limit the scope of Renderer so that it's destructor is called before glfwTerminate
     Application application{ {
-        .m_windowWidth  = 800,
-        .m_windowHeight = 600,
-        .m_gridWidth    = length,
-        .m_gridHeight   = width,
-        .m_startDensity = density,
-        .m_delay        = static_cast<std::size_t>(delay * 1000),    // s to ms
-        .m_vsync        = !noVsync,
+        .m_windowWidth    = 800,
+        .m_windowHeight   = 600,
+        .m_gridWidth      = length,
+        .m_gridHeight     = width,
+        .m_startDensity   = density,
+        .m_delay          = static_cast<std::size_t>(delay * 1000),    // s to ms
+        .m_vsync          = !noVsync,
+        .m_updateStrategy = strategy,
     } };
     application.run();
 }

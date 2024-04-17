@@ -22,7 +22,7 @@ public:
 private:
     std::vector<std::jthread> m_threads;
     std::deque<Task_type>     m_tasks;
-    std::mutex                m_mutex;
+    mutable std::mutex        m_mutex;
     std::condition_variable   m_condition;
     bool                      m_stop = false;
 
@@ -30,28 +30,27 @@ public:
     ThreadPool(size_t numThreads)
     {
         for (size_t i = 0; i < numThreads; ++i) {
-            m_threads.emplace_back([this] {
-                while (true) {
-                    Task_type task;
-                    {
-                        std::unique_lock lock{ m_mutex };
+            m_threads.emplace_back([this] { while (true) {
+                Task_type task;
+                {
+                    std::unique_lock lock{ m_mutex };
 
-                        m_condition.wait(lock, [this] {
-                            auto condition = !m_tasks.empty() || m_stop;
-                            return condition;
-                        });
+                    m_condition.wait(lock, [this] {
+                        auto condition = !m_tasks.empty() || m_stop;
+                        return condition;
+                    });
 
-                        if (m_stop && m_tasks.empty()) {
-                            return;
-                        }
-
-                        task = std::move(m_tasks.front());
-                        m_tasks.pop_front();
+                    if (m_stop && m_tasks.empty()) {
+                        return;
                     }
-                    task();
+
+                    task = std::move(m_tasks.front());
+                    m_tasks.pop_front();
                 }
-            });
+                task();
+            } });
         }
+        spdlog::info("(ThreadPool) Pool created with [{}] numbers of thread", numThreads);
     }
 
     ~ThreadPool()
@@ -95,7 +94,7 @@ public:
         m_condition.notify_one();
     }
 
-    std::size_t queuedTasks()
+    std::size_t queuedTasks() const
     {
         std::unique_lock lock{ m_mutex };
         return m_tasks.size();
@@ -122,7 +121,7 @@ public:
         }
     }
 
-    std::size_t size()
+    std::size_t size() const
     {
         // std::unique_lock lock{ m_mutex };    // I guess lock is not actually needed here
         return m_threads.size();

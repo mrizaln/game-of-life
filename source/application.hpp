@@ -26,13 +26,14 @@ class Application
 public:
     struct InitParam
     {
-        int         m_windowWidth;
-        int         m_windowHeight;
-        int         m_gridWidth;
-        int         m_gridHeight;
-        float       m_startDensity;
-        std::size_t m_delay;    // in milliseconds
-        bool        m_vsync;
+        int                  m_windowWidth;
+        int                  m_windowHeight;
+        int                  m_gridWidth;
+        int                  m_gridHeight;
+        float                m_startDensity;
+        std::size_t          m_delay;    // in milliseconds
+        bool                 m_vsync;
+        Grid::UpdateStrategy m_updateStrategy;
     };
 
     Application()                              = delete;
@@ -42,7 +43,7 @@ public:
     Application& operator=(Application&&)      = delete;
 
     Application(InitParam param)
-        : m_simulation{ param.m_gridWidth, param.m_gridHeight, param.m_delay }
+        : m_simulation{ param.m_gridWidth, param.m_gridHeight, param.m_updateStrategy, param.m_delay }
         , m_window{ std::nullopt }
         , m_renderer{ std::nullopt }
         , m_interp{ -1, -1 }
@@ -56,7 +57,7 @@ public:
         m_window = WindowManager::createWindow(s_defaultTitle.data(), 800, 600);
         if (!m_window.has_value()) {
             spdlog::critical("(Application) Failed to create window");
-            throw std::runtime_error { "Failed to create window" };
+            throw std::runtime_error{ "Failed to create window" };
         }
         m_window->useHere();
         m_window->setVsync(param.m_vsync);
@@ -359,9 +360,7 @@ private:
 
         // force update (if paused, do nothing instead)
         w.addKeyEventHandler(GLFW_KEY_U, 0, A::CALLBACK, [this](Window&) {
-            if (m_simulation.isPaused()) {
-                m_simulation.write(&Grid::updateState);
-            }
+            m_simulation.forceUpdate();
         });
 
         // fit grid to window
