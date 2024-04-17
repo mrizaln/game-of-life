@@ -186,8 +186,8 @@ public:
     {
         // boundary condition: wrap-around
         if (!isInBound(xPos, yPos)) {
-            int effX{ (m_width + yPos % m_width) % m_width };    // following python behavior of operator% (modulo)
-            int effY{ (m_height + xPos % m_height) % m_height };
+            int effX{ (m_width + xPos % m_width) % m_width };    // following python behavior of operator% (modulo)
+            int effY{ (m_height + yPos % m_height) % m_height };
             return get(effX, effY);
         }
         return get(xPos, yPos);
@@ -197,8 +197,8 @@ public:
     {
         // boundary condition: wrap-around
         if (!isInBound(xPos, yPos)) {
-            int effX{ (m_width + yPos % m_width) % m_width };    // following python behavior of operator% (modulo)
-            int effY{ (m_height + xPos % m_height) % m_height };
+            int effX{ (m_width + xPos % m_width) % m_width };    // following python behavior of operator% (modulo)
+            int effY{ (m_height + yPos % m_height) % m_height };
             return get(effX, effY);
         }
         return get(xPos, yPos);

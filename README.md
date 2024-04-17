@@ -10,6 +10,7 @@ Conway's Game of Life
 - [ ] Implement queue for `Simulation` to avoid contention when trying to access object inside it
 - [ ] Add trailing effect (draw previously live cell as dimmer version of currently live)
 - [x] Parallelize the state update
+- [x] Fix bug: cell randomly become alive appears on the edges
 
 Preview:
 
