@@ -152,25 +152,6 @@ public:
     }
 
 private:
-    template <typename __value_type = value_type>
-    struct __PointsGenerator
-    {
-        __value_type m_delta{};
-        __value_type m_current{ START_FROM };
-
-        __PointsGenerator(__value_type delta)
-            : m_delta{ delta }
-        {
-        }
-
-        __value_type operator()()
-        {
-            auto tmp{ m_current };
-            m_current += m_delta;
-            return tmp;
-        }
-    };
-
     static constexpr value_type START_FROM{ -0.5 };
     static constexpr value_type END_TO{ 0.5 };
 
@@ -243,8 +224,26 @@ private:
         value_type xDelta{ (END_TO - START_FROM) / static_cast<value_type>(m_subdivideX) };
         value_type yDelta{ (END_TO - START_FROM) / static_cast<value_type>(m_subdivideY) };
 
-        std::generate(xVertices.begin(), xVertices.end(), __PointsGenerator{ xDelta });
-        std::generate(yVertices.begin(), yVertices.end(), __PointsGenerator{ yDelta });
+        struct PointsGenerator
+        {
+            value_type m_delta{};
+            value_type m_current{ START_FROM };
+
+            PointsGenerator(value_type delta)
+                : m_delta{ delta }
+            {
+            }
+
+            value_type operator()()
+            {
+                auto tmp{ m_current };
+                m_current += m_delta;
+                return tmp;
+            }
+        };
+
+        std::generate(xVertices.begin(), xVertices.end(), PointsGenerator{ xDelta });
+        std::generate(yVertices.begin(), yVertices.end(), PointsGenerator{ yDelta });
 
         for (std::size_t i{ 0 }; i < xVertices.size(); ++i) {
             auto& x{ xVertices[i] };

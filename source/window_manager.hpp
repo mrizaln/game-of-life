@@ -13,8 +13,6 @@
 #include <queue>
 #include <thread>
 
-using unique_GLFWwindow = std::unique_ptr<GLFWwindow, decltype([](GLFWwindow* win) { glfwDestroyWindow(win); })>;
-
 // turns fps to milliseconds
 inline std::chrono::milliseconds operator""_fps(unsigned long long fps)
 {
@@ -30,6 +28,44 @@ class WindowManager
 public:
     class ErrorUninitialized;
     class ErrorAccessFromWrongThread;
+
+    class UniqueGLFWwindow
+    {
+    public:
+        UniqueGLFWwindow(GLFWwindow* handle)
+            : m_handle{ handle }
+        {
+        }
+
+        UniqueGLFWwindow(const UniqueGLFWwindow&)            = delete;
+        UniqueGLFWwindow& operator=(const UniqueGLFWwindow&) = delete;
+
+        UniqueGLFWwindow(UniqueGLFWwindow&& other) noexcept
+            : m_handle{ std::exchange(other.m_handle, nullptr) }
+        {
+        }
+
+        UniqueGLFWwindow& operator=(UniqueGLFWwindow&& other) noexcept
+        {
+            if (this != &other) {
+                m_handle = std::exchange(other.m_handle, nullptr);
+            }
+            return *this;
+        }
+
+        ~UniqueGLFWwindow()
+        {
+            if (m_handle) {
+                glfwDestroyWindow(m_handle);
+            }
+        }
+
+        operator bool() const { return m_handle != nullptr; }
+        GLFWwindow* get() { return m_handle; }
+
+    private:
+        GLFWwindow* m_handle;
+    };
 
     ~WindowManager()                               = default;
     WindowManager()                                = delete;
@@ -77,9 +113,9 @@ private:
 
     void checkTasks();
 
-    inline static spp::SyncUnique<WindowManager, std::mutex> s_instance{ nullptr };
+    inline static spp::SyncUnique<WindowManager> s_instance{ nullptr };
 
-    std::unordered_map<std::size_t, unique_GLFWwindow>        m_windows;
+    std::unordered_map<std::size_t, UniqueGLFWwindow>         m_windows;
     std::queue<std::size_t>                                   m_windowDeleteQueue;
     std::queue<std::function<void()>>                         m_taskQueue;
     std::queue<std::pair<std::size_t, std::function<void()>>> m_windowTaskQueue;

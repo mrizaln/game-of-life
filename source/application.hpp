@@ -126,7 +126,7 @@ private:
                     std::swap(x1, x2);
                     std::swap(y1, y2);
                 }
-                for (int col{ x1 }; col < x2; ++col) {
+                for (int col{ x1 }; col <= x2; ++col) {
                     const auto row{ static_cast<int>(grad * (col - x1) + y1) };
                     fn(col, row);
                 }
@@ -136,7 +136,7 @@ private:
                     std::swap(y1, y2);
                 }
                 float inv_grad{ static_cast<float>((x2 - x1) / static_cast<float>(y2 - y1)) };
-                for (int row{ y1 }; row < y2; ++row) {
+                for (int row{ y1 }; row <= y2; ++row) {
                     const auto col{ static_cast<int>(inv_grad * (row - y1) + x1) };
                     fn(col, row);
                 }
@@ -251,6 +251,7 @@ private:
             if (button == MouseButton::Button::LEFT && state == MouseButton::State::PRESSED) {
                 m_previouslyPaused = m_simulation.isPaused();
                 m_simulation.setPause(true);
+                m_simulation.wakeUp();
 
                 m_simulation.write([x, y](Grid& grid) {
                     if (grid.isInBound(x, y)) {
@@ -267,6 +268,7 @@ private:
             if (button == MouseButton::Button::RIGHT && state == MouseButton::State::PRESSED) {
                 m_previouslyPaused = m_simulation.isPaused();
                 m_simulation.setPause(true);
+                m_simulation.wakeUp();
 
                 m_simulation.write([x, y](Grid& grid) {
                     if (grid.isInBound(x, y)) {
@@ -337,6 +339,11 @@ private:
         // toggle pause
         w.addKeyEventHandler(GLFW_KEY_SPACE, 0, A::CALLBACK, [this](Window&) {
             m_simulation.togglePause();
+        });
+
+        // force update (if paused, do nothing instead)
+        w.addKeyEventHandler(GLFW_KEY_U, 0, A::CALLBACK, [this](Window&) {
+            m_simulation.wakeUp();
         });
 
         // fit grid to window

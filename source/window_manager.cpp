@@ -62,7 +62,7 @@ std::optional<Window> WindowManager::createWindow(std::string title, int width, 
 {
     validateAccess(true);
 
-    unique_GLFWwindow glfwWindow{ glfwCreateWindow(width, height, title.c_str(), nullptr, nullptr) };
+    UniqueGLFWwindow glfwWindow{ glfwCreateWindow(width, height, title.c_str(), nullptr, nullptr) };
     if (!glfwWindow) {
         spdlog::critical("(WindowManager) Window creation failed");
         return {};
