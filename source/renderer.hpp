@@ -192,6 +192,31 @@ public:
         }
     }
 
+    void fitToWindow()
+    {
+        resetCamera(false);
+
+        const auto gridWidth = (float)m_cache.m_gridDimension.m_width;
+        const auto winWidth  = (float)m_cache.m_windowDimension.m_width;
+        const auto zoom      = 2 / 1.0f * winWidth / gridWidth;
+        setCameraZoom(zoom);
+
+        constexpr int maxCol{ 75 };
+
+        const auto& Z{ zoom };
+        auto        z{ std::max({
+            2.0f * winWidth / gridWidth,    // all grid visible
+            4.0f * winWidth / gridWidth,    // half column
+            // 4/1.1f * winHeight / gridHeight,     // half row
+
+            2.0f * winWidth / float(maxCol)    // show only number of maxCol
+        }) };
+
+        auto       n{ -std::log(Z / z) / std::log(1.1f) };
+        const auto speed = 100.0f * std::pow(1.1f, n / 2);
+        setCameraSpeed(speed);
+    }
+
     glm::vec3 getCameraPosition()
     {
         return m_camera.position;

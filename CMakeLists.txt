@@ -16,24 +16,36 @@ find_package(glm CONFIG REQUIRED)
 find_package(stb CONFIG REQUIRED)
 find_package(PerlinNoise CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
+find_package(CLI11 CONFIG REQUIRED)
 
 add_subdirectory(lib/sync-cpp) # emits sync-cpp link target
 
-# main
-add_executable(main source/main.cpp source/window.cpp source/window_manager.cpp)
-target_include_directories(main PUBLIC source)
-target_link_libraries(
-  main
-  PUBLIC glfw
-         glad::glad
-         glm::glm
-         stb::stb
-         siv::PerlinNoise
-         spdlog::spdlog
-         sync-cpp)
+function(create_target NAME)
+  add_executable(${NAME} source/main.cpp source/window.cpp
+                         source/window_manager.cpp)
+  target_include_directories(${NAME} PRIVATE source)
+  target_link_libraries(
+    ${NAME}
+    PRIVATE glfw
+            glad::glad
+            glm::glm
+            stb::stb
+            siv::PerlinNoise
+            spdlog::spdlog
+            CLI11::CLI11
+            sync-cpp)
+endfunction()
 
-# target_compile_options(main PRIVATE -fsanitize=thread)
-# target_link_options(main PRIVATE -fsanitize=thread)
+# targets
+create_target(main)
+
+create_target(main-asan)
+target_compile_options(main-asan PRIVATE -fsanitize=address,leak,undefined)
+target_link_options(main-asan PRIVATE -fsanitize=address,leak,undefined)
+
+create_target(main-tsan)
+target_compile_options(main-tsan PRIVATE -fsanitize=thread)
+target_link_options(main-tsan PRIVATE -fsanitize=thread)
 
 # link resources to build directory
 add_custom_command(

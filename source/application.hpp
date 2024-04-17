@@ -14,6 +14,7 @@
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
+#include <cmath>
 #include <format>
 #include <optional>
 #include <string_view>
@@ -28,7 +29,9 @@ public:
         int         m_windowHeight;
         int         m_gridWidth;
         int         m_gridHeight;
+        float       m_startDensity;
         std::size_t m_delay;    // in milliseconds
+        bool        m_vsync;
     };
 
     Application()                              = delete;
@@ -53,9 +56,18 @@ public:
         if (!m_window.has_value()) {
             std::cerr << "Failed to create window";
         }
-
         m_window->useHere();
+        m_window->setVsync(param.m_vsync);
         m_simulation.read([this](const Grid& grid) { m_renderer.emplace(*m_window, grid); });
+
+        // initialize the grid and the buffer
+        m_simulation.write([&](Grid& grid) {
+            spdlog::info("(Application) Populating grid...");
+            grid.populate(std::clamp(param.m_startDensity, 0.0f, 1.0f));
+            auto data = grid.data();
+            m_buffer.reset(std::move(data));
+            spdlog::info("(Application) Populating grid done.");
+        });
 
         configureControl();
     }
@@ -70,15 +82,8 @@ public:
         glfwTerminate();
     }
 
-    void run(float startDensity = 0.3f)
+    void run()
     {
-        // initialize the grid and the buffer
-        m_simulation.write([this, startDensity](Grid& grid) {
-            grid.populate(startDensity);
-            auto data = grid.data();
-            m_buffer.reset(std::move(data));
-        });
-
         // launch the simulation
         m_simulation.launch([this](Grid& grid) {
             m_buffer.updateBuffer([&](auto& data) {
@@ -87,10 +92,18 @@ public:
         });
 
         // render the grid
-        m_window->run([this] {
+        m_window->run([this, timeSum = 0.0]() mutable {
             const auto& front = m_buffer.swapBuffers();
             m_renderer->render(*m_window, front, m_simulation.isPaused());
-            m_window->updateTitle(std::format("{} [{:.2f}tps]", s_defaultTitle, m_simulation.getTickRate()));
+
+            const auto fps = 1.0 / m_window->getDeltaTime();
+            const auto tps = m_simulation.getTickRate();
+
+            // update title every 1 seconds
+            if ((timeSum += m_window->getDeltaTime()) > 1.0) {
+                m_window->updateTitle(std::format("{} [{:.2f}FPS|{:.2f}TPS]", s_defaultTitle, fps, tps));
+                timeSum = 0.0;
+            }
 
             WindowManager::pollEvents();
         });
@@ -108,12 +121,20 @@ private:
 
         void interpolate(int x, int y, std::invocable<int, int> auto&& fn)
         {
-            int x1{ m_xLast };
-            int y1{ m_yLast };
-            int x2{ x };
-            int y2{ y };
+            const int xDelta = x - m_xLast;
+            const int yDelta = y - m_yLast;
 
-            float grad{ static_cast<float>((y2 - y1) / static_cast<float>(x2 - x1)) };
+            if (xDelta == 0 && yDelta == 0) {
+                return;
+            }
+
+            const auto grad{ (float)yDelta / (float)xDelta };
+            const auto grad_inv{ (float)xDelta / (float)yDelta };
+
+            int x1 = std::exchange(m_xLast, x);
+            int y1 = std::exchange(m_yLast, y);
+            int x2 = x;
+            int y2 = y;
 
             if (x1 > x2) {
                 std::swap(x1, x2);
@@ -135,15 +156,11 @@ private:
                     std::swap(x1, x2);
                     std::swap(y1, y2);
                 }
-                float inv_grad{ static_cast<float>((x2 - x1) / static_cast<float>(y2 - y1)) };
                 for (int row{ y1 }; row <= y2; ++row) {
-                    const auto col{ static_cast<int>(inv_grad * (row - y1) + x1) };
+                    const auto col{ static_cast<int>(grad_inv * (row - y1) + x1) };
                     fn(col, row);
                 }
             }
-
-            m_xLast = x;
-            m_yLast = y;
         }
 
     private:
@@ -331,6 +348,11 @@ private:
             window.setCaptureMouse(!window.isMouseCaptured());
         });
 
+        // toggle vsync
+        w.addKeyEventHandler(GLFW_KEY_V, GLFW_MOD_ALT, A::CALLBACK, [](Window& window) {
+            window.setVsync(!window.isVsyncEnabled());
+        });
+
         // reset camera
         w.addKeyEventHandler(GLFW_KEY_BACKSPACE, 0, A::CALLBACK, [this](Window&) {
             m_renderer->resetCamera(false);
@@ -347,28 +369,8 @@ private:
         });
 
         // fit grid to window
-        w.addKeyEventHandler(GLFW_KEY_F, 0, A::CALLBACK, [this](Window& window) {
-            m_renderer->resetCamera(false);
-
-            const auto gridWidth = (float)m_simulation.read(&Grid::getLength);
-            const auto winWidth  = (float)window.getProperties().m_width;
-            const auto zoom      = 2 / 1.0f * winWidth / gridWidth;
-            m_renderer->setCameraZoom(zoom);
-
-            constexpr int maxCol{ 75 };
-
-            const auto& Z{ zoom };
-            auto        z{ std::max({
-                2.0f * winWidth / gridWidth,    // all grid visible
-                4.0f * winWidth / gridWidth,    // half column
-                // 4/1.1f * winHeight / gridHeight,     // half row
-
-                2.0f * winWidth / float(maxCol)    // show only number of maxCol
-            }) };
-
-            auto       n{ -std::log(Z / z) / std::log(1.1f) };
-            const auto speed = 100.0f * std::pow(1.1f, n / 2);
-            m_renderer->setCameraSpeed(speed);
+        w.addKeyEventHandler(GLFW_KEY_F, 0, A::CALLBACK, [this](Window&) {
+            m_renderer->fitToWindow();
         });
 
         // cycle through the grid modes
@@ -384,8 +386,10 @@ private:
         // populate grid with new random cells
         w.addKeyEventHandler(GLFW_KEY_P, 0, A::CALLBACK, [this](Window&) {
             m_simulation.write([](Grid& grid) {
+                spdlog::info("(Application) Populating grid...");
                 auto density = Grid::getRandomProbability() * 0.6f + 0.2f;
                 grid.populate(density);
+                spdlog::info("(Application) Populating grid done.");
             });
         });
 

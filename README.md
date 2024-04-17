@@ -6,7 +6,8 @@ Conway's Game of Life
 
 - [x] Restructure code
 - [x] Fix data race
-- [ ] Fix argument parsing
+- [x] Fix argument parsing
+- [ ] Implement queue for `Simulation` to avoid contention when trying to access object inside it.
 
 Preview:
 
