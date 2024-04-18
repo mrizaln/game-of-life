@@ -4,13 +4,12 @@
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
-#include <glad/glad.h>
+#include <glbinding/glbinding.h>
 #include <spdlog/spdlog.h>
 
 #include <functional>
 #include <initializer_list>
 #include <mutex>
-#include <stdexcept>
 #include <thread>
 #include <utility>
 
@@ -155,10 +154,7 @@ Window::Window(std::size_t id, GLFWwindow* handle, WindowProperties&& prop)
 {
     useHere();
     if (!m_contextInitialized) {
-        // this is a very exceptional case, throwing is OK
-        if (gladLoadGLLoader((GLADloadproc)glfwGetProcAddress) == 0) {
-            throw std::runtime_error{ "Failed to initialize glad" };
-        }
+        glbinding::initialize(static_cast<glbinding::ContextHandle>(m_id), glfwGetProcAddress, true);    // only resolve functions that are actually used (lazy)
         m_contextInitialized = true;
 
         glfwSetFramebufferSizeCallback(m_windowHandle, Window::framebufferSizeCallback);

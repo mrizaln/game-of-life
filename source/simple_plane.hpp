@@ -1,7 +1,7 @@
 #ifndef SIMPLE_PLANE_HPP
 #define SIMPLE_PLANE_HPP
 
-#include <glad/glad.h>
+#include <glbinding/gl/gl.h>
 
 #include <cstddef>
 #include <iterator>
@@ -79,20 +79,20 @@ public:
     void draw() const
     {
         // bind buffer
-        glBindVertexArray(VAO);
+        gl::glBindVertexArray(VAO);
 
         // draw
         // glDrawArrays(GL_TRIANGLES, 0, std::size(m_interleavedVertices));
-        glDrawElements(GL_TRIANGLES, std::size(s_planeIndices), GL_UNSIGNED_INT, 0);
+        gl::glDrawElements(gl::GL_TRIANGLES, std::size(s_planeIndices), gl::GL_UNSIGNED_INT, 0);
 
         // unbind buffer
-        glBindVertexArray(0);
+        gl::glBindVertexArray(0);
     }
 
     void deleteBuffers()
     {
-        glDeleteVertexArrays(1, &VAO);
-        glDeleteBuffers(1, &VBO);
+        gl::glDeleteVertexArrays(1, &VAO);
+        gl::glDeleteBuffers(1, &VBO);
     }
 
     void multiplyTexCoords(float width, float height)
@@ -127,38 +127,38 @@ private:
 
     void setBuffers()
     {
-        glGenVertexArrays(1, &VAO);
-        glGenBuffers(1, &VBO);
-        glGenBuffers(1, &EBO);
+        gl::glGenVertexArrays(1, &VAO);
+        gl::glGenBuffers(1, &VBO);
+        gl::glGenBuffers(1, &EBO);
 
         // bind
         //----
-        glBindVertexArray(VAO);
+        gl::glBindVertexArray(VAO);
 
-        glBindBuffer(GL_ARRAY_BUFFER, VBO);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(m_interleavedVertices), m_interleavedVertices, GL_STATIC_DRAW);
+        gl::glBindBuffer(gl::GL_ARRAY_BUFFER, VBO);
+        gl::glBufferData(gl::GL_ARRAY_BUFFER, sizeof(m_interleavedVertices), m_interleavedVertices, gl::GL_STATIC_DRAW);
 
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(s_planeIndices), s_planeIndices, GL_STATIC_DRAW);
+        gl::glBindBuffer(gl::GL_ELEMENT_ARRAY_BUFFER, EBO);
+        gl::glBufferData(gl::GL_ELEMENT_ARRAY_BUFFER, sizeof(s_planeIndices), s_planeIndices, gl::GL_STATIC_DRAW);
 
         // vertex attribute
         //-----------------
         // position
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, m_interleavedVerticesStrideSize, (void*)(0));
+        gl::glEnableVertexAttribArray(0);
+        gl::glVertexAttribPointer(0, 3, gl::GL_FLOAT, gl::GL_FALSE, m_interleavedVerticesStrideSize, (void*)(0));
 
         // normal
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, m_interleavedVerticesStrideSize, (void*)(3 * sizeof(float)));
+        gl::glEnableVertexAttribArray(1);
+        gl::glVertexAttribPointer(1, 3, gl::GL_FLOAT, gl::GL_FALSE, m_interleavedVerticesStrideSize, (void*)(3 * sizeof(float)));
 
         // texcoords
-        glEnableVertexAttribArray(2);
-        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, m_interleavedVerticesStrideSize, (void*)(6 * sizeof(float)));
+        gl::glEnableVertexAttribArray(2);
+        gl::glVertexAttribPointer(2, 2, gl::GL_FLOAT, gl::GL_FALSE, m_interleavedVerticesStrideSize, (void*)(6 * sizeof(float)));
 
         // unbind
         //----
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glBindVertexArray(0);
+        gl::glBindBuffer(gl::GL_ARRAY_BUFFER, 0);
+        gl::glBindVertexArray(0);
     }
 };
 

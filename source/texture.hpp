@@ -1,13 +1,13 @@
 #ifndef TEXTURE_HPP
 #define TEXTURE_HPP
 
-#include <glad/glad.h>    // include glad to get all the required OpenGL headers
+#include <glbinding/gl/gl.h>
 #define STB_IMAGE_IMPLEMENTATION
 #include <spdlog/spdlog.h>
 #include <stb/stb_image.h>
 
 #include <cstddef>    // std::size_t
-#include <limits>    // std::numeric_limits
+#include <limits>     // std::numeric_limits
 #include <unordered_map>
 
 class Texture
@@ -17,15 +17,15 @@ private:
 
     unsigned char* imageData{};
 
-    GLenum magFilter{};
-    GLenum minFilter{};
-    GLenum wrapFilter{};
+    gl::GLenum magFilter{};
+    gl::GLenum minFilter{};
+    gl::GLenum wrapFilter{};
 
-    inline static std::unordered_map<std::size_t, GLenum> numChannelsToGLenum{
-        { 1, GL_RED },
-        { 2, GL_RG },
-        { 3, GL_RGB },
-        { 4, GL_RGBA }
+    inline static std::unordered_map<std::size_t, gl::GLenum> numChannelsToGLenum{
+        { 1, gl::GL_RED },
+        { 2, gl::GL_RG },
+        { 3, gl::GL_RGB },
+        { 4, gl::GL_RGBA }
     };
 
 public:
@@ -71,9 +71,9 @@ public:
         int            width,
         int            height,
         int            channels  = 3,
-        int            minFilter = GL_LINEAR,
-        int            magFilter = GL_NEAREST,
-        int            wrap      = GL_REPEAT
+        gl::GLenum     minFilter = gl::GL_LINEAR,
+        gl::GLenum     magFilter = gl::GL_NEAREST,
+        gl::GLenum     wrap      = gl::GL_REPEAT
     )
         : imageData{ colorData }
         , imageWidth{ width }
@@ -92,9 +92,9 @@ public:
 
     Texture(
         const char* texFilePath,
-        int         minFilter      = GL_LINEAR,
-        int         magFilter      = GL_NEAREST,
-        int         wrap           = GL_REPEAT,
+        gl::GLenum  minFilter      = gl::GL_LINEAR,
+        gl::GLenum  magFilter      = gl::GL_NEAREST,
+        gl::GLenum  wrap           = gl::GL_REPEAT,
         bool        flipVertically = true
     )
     {
@@ -114,61 +114,61 @@ public:
         imageData = nullptr;
     }
 
-    void updateTexture(void* data, int width, int height, int numChannels = 3, GLenum dataType = GL_UNSIGNED_BYTE)
+    void updateTexture(void* data, int width, int height, int numChannels = 3, gl::GLenum dataType = gl::GL_UNSIGNED_BYTE)
     {
-        glBindTexture(GL_TEXTURE_2D, textureID);
-        // glTexImage2DGL_TEXTURE_2D, 0, numChannelsToGLenum[numChannels], width, height, 0, numChannelsToGLenum[numChannels], dataType, data);
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, numChannelsToGLenum[numChannels], dataType, data);
-        // glGenerateMipmap(GL_TEXTURE_2D);
+        gl::glBindTexture(gl::GL_TEXTURE_2D, textureID);
+        // gl::glTexImage2DGL_TEXTURE_2D, 0, numChannelsToGLenum[numChannels], width, height, 0, numChannelsToGLenum[numChannels], dataType, data);
+        gl::glTexSubImage2D(gl::GL_TEXTURE_2D, 0, 0, 0, width, height, numChannelsToGLenum[numChannels], dataType, data);
+        // gl::glGenerateMipmap(GL_TEXTURE_2D);
     }
 
-    void updateMagFilter(GLenum magFilter)
+    void updateMagFilter(gl::GLenum magFilter)
     {
-        glBindTexture(GL_TEXTURE_2D, textureID);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, magFilter);
+        gl::glBindTexture(gl::GL_TEXTURE_2D, textureID);
+        gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_MAG_FILTER, magFilter);
     }
 
-    void updateMinFilter(GLenum minFilter)
+    void updateMinFilter(gl::GLenum minFilter)
     {
-        glBindTexture(GL_TEXTURE_2D, textureID);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minFilter);
+        gl::glBindTexture(gl::GL_TEXTURE_2D, textureID);
+        gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_MIN_FILTER, minFilter);
     }
 
-    void updateWrapFilter(GLenum wrap)
+    void updateWrapFilter(gl::GLenum wrap)
     {
-        glBindTexture(GL_TEXTURE_2D, textureID);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrap);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrap);
+        gl::glBindTexture(gl::GL_TEXTURE_2D, textureID);
+        gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_WRAP_S, wrap);
+        gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_WRAP_T, wrap);
     }
 
-    void updateFilters(GLenum magFilter, GLenum minFilter, GLenum wrap)
+    void updateFilters(gl::GLenum magFilter, gl::GLenum minFilter, gl::GLenum wrap)
     {
-        glBindTexture(GL_TEXTURE_2D, textureID);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, magFilter);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minFilter);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrap);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrap);
+        gl::glBindTexture(gl::GL_TEXTURE_2D, textureID);
+        gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_MAG_FILTER, magFilter);
+        gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_MIN_FILTER, minFilter);
+        gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_WRAP_S, wrap);
+        gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_WRAP_T, wrap);
     }
 
 private:
-    void generateTexture(int minFilter = GL_LINEAR, int magFilter = GL_NEAREST, int wrap = GL_REPEAT)
+    void generateTexture(gl::GLenum minFilter = gl::GL_LINEAR, gl::GLenum magFilter = gl::GL_NEAREST, gl::GLenum wrap = gl::GL_REPEAT)
     {
         // generate texture
-        glGenTextures(1, &textureID);
+        gl::glGenTextures(1, &textureID);
 
         // bind texture
-        glBindTexture(GL_TEXTURE_2D, textureID);
+        gl::glBindTexture(gl::GL_TEXTURE_2D, textureID);
 
         // set texture parameters
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrap);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrap);
+        gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_WRAP_S, wrap);
+        gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_WRAP_T, wrap);
 
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minFilter);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, magFilter);
+        gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_MIN_FILTER, minFilter);
+        gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_MAG_FILTER, magFilter);
 
         // now generate texture from image
-        glTexImage2D(GL_TEXTURE_2D, 0, numChannelsToGLenum[nrChannels], imageWidth, imageHeight, 0, numChannelsToGLenum[nrChannels], GL_UNSIGNED_BYTE, imageData);
-        glGenerateMipmap(GL_TEXTURE_2D);
+        gl::glTexImage2D(gl::GL_TEXTURE_2D, 0, numChannelsToGLenum[nrChannels], imageWidth, imageHeight, 0, numChannelsToGLenum[nrChannels], gl::GL_UNSIGNED_BYTE, imageData);
+        gl::glGenerateMipmap(gl::GL_TEXTURE_2D);
     }
 };
 

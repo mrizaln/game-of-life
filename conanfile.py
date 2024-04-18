@@ -9,7 +9,7 @@ class Recipe(ConanFile):
 
     def requirements(self):
         self.requires("glfw/3.4")
-        self.requires("glad/0.1.36")
+        self.requires("glbinding/3.3.0")
         self.requires("glm/0.9.9.8")
         self.requires("stb/cci.20230920")
         self.requires("perlinnoise/3.0.0")

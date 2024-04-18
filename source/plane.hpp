@@ -3,7 +3,7 @@
 
 #include "unrolled_matrix.hpp"
 
-#include <glad/glad.h>
+#include <glbinding/gl/gl.h>
 
 #include <algorithm>    // std::generate
 #include <array>
@@ -45,25 +45,25 @@ public:
 
     void draw()
     {
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, m_shownIndices.size() * sizeof(m_shownIndices.front()), m_shownIndices.data(), GL_DYNAMIC_DRAW);
+        gl::glBindBuffer(gl::GL_ELEMENT_ARRAY_BUFFER, EBO);
+        gl::glBufferData(gl::GL_ELEMENT_ARRAY_BUFFER, m_shownIndices.size() * sizeof(m_shownIndices.front()), m_shownIndices.data(), gl::GL_DYNAMIC_DRAW);
 
         // bind buffer
-        glBindVertexArray(VAO);
+        gl::glBindVertexArray(VAO);
 
         // draw
         // glDrawArrays(GL_TRIANGLES, 0, std::size(m_interleavedVertices));
         std::size_t indicesSize{ m_shownIndices.size() };
-        glDrawElements(GL_TRIANGLES, indicesSize, GL_UNSIGNED_INT, 0);
+        gl::glDrawElements(gl::GL_TRIANGLES, indicesSize, gl::GL_UNSIGNED_INT, 0);
 
         // unbind buffer
-        glBindVertexArray(0);
+        gl::glBindVertexArray(0);
     }
 
     void deleteBuffers()
     {
-        glDeleteVertexArrays(1, &VAO);
-        glDeleteBuffers(1, &VBO);
+        gl::glDeleteVertexArrays(1, &VAO);
+        gl::glDeleteBuffers(1, &VBO);
     }
 
     void multiplyTexCoords(value_type width, value_type height)
@@ -152,29 +152,29 @@ private:
 
     void setBuffers()
     {
-        glGenVertexArrays(1, &VAO);
-        glGenBuffers(1, &VBO);
-        glGenBuffers(1, &EBO);
+        gl::glGenVertexArrays(1, &VAO);
+        gl::glGenBuffers(1, &VBO);
+        gl::glGenBuffers(1, &EBO);
 
         // bind
         //----
-        glBindVertexArray(VAO);
+        gl::glBindVertexArray(VAO);
 
-        glBindBuffer(GL_ARRAY_BUFFER, VBO);
-        glBufferData(GL_ARRAY_BUFFER, m_interleavedVertices.size() * sizeof(m_interleavedVertices.front()), &m_interleavedVertices.front(), GL_STATIC_DRAW);
+        gl::glBindBuffer(gl::GL_ARRAY_BUFFER, VBO);
+        gl::glBufferData(gl::GL_ARRAY_BUFFER, m_interleavedVertices.size() * sizeof(m_interleavedVertices.front()), &m_interleavedVertices.front(), gl::GL_STATIC_DRAW);
 
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, m_fullIndices.size() * sizeof(m_fullIndices.front()), &m_fullIndices.front(), GL_DYNAMIC_DRAW);
+        gl::glBindBuffer(gl::GL_ELEMENT_ARRAY_BUFFER, EBO);
+        gl::glBufferData(gl::GL_ELEMENT_ARRAY_BUFFER, m_fullIndices.size() * sizeof(m_fullIndices.front()), &m_fullIndices.front(), gl::GL_DYNAMIC_DRAW);
 
         // vertex attribute
         //-----------------
         // position
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, m_interleavedVerticesStrideSize, (void*)(0));
+        gl::glEnableVertexAttribArray(0);
+        gl::glVertexAttribPointer(0, 3, gl::GL_FLOAT, gl::GL_FALSE, m_interleavedVerticesStrideSize, (void*)(0));
 
         // texcoords
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, m_interleavedVerticesStrideSize, (void*)(3 * sizeof(value_type)));
+        gl::glEnableVertexAttribArray(1);
+        gl::glVertexAttribPointer(1, 2, gl::GL_FLOAT, gl::GL_FALSE, m_interleavedVerticesStrideSize, (void*)(3 * sizeof(value_type)));
 
 #ifdef ENABLE_NORMAL
         // normal
@@ -184,8 +184,8 @@ private:
 
         // unbind
         //----
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glBindVertexArray(0);
+        gl::glBindBuffer(gl::GL_ARRAY_BUFFER, 0);
+        gl::glBindVertexArray(0);
     }
 
     void generateVerticesAndIndices()

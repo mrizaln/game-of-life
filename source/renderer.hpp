@@ -8,6 +8,7 @@
 #include "window.hpp"
 #include "window_manager.hpp"
 
+#include <glbinding/gl/gl.h>
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 #include <spdlog/spdlog.h>
@@ -71,9 +72,9 @@ public:
             "./resources/shaders/shader.vs",
             "./resources/shaders/shader.fs",
             "./resources/textures/grid.png",
-            GL_LINEAR,
-            GL_LINEAR,
-            GL_REPEAT,
+            gl::GL_LINEAR,
+            gl::GL_LINEAR,
+            gl::GL_REPEAT,
             glm::vec3{ (float)grid.width() / 2.0f, (float)grid.height() / 2.0f, 0.0f },    // pos
             glm::vec3{ 1.0f, 1.0f, 1.0f },                                                 // color
             glm::vec3{ grid.width(), grid.height(), 0.0f },                                // scale
@@ -84,9 +85,9 @@ public:
             "./resources/shaders/gridShader.vert",                                         //
             "./resources/shaders/gridShader.frag",                                         //
             "./resources/textures/cell.png",                                               //
-            GL_LINEAR,                                                                     //
-            GL_LINEAR,                                                                     //
-            GL_REPEAT,                                                                     //
+            gl::GL_LINEAR,                                                                 //
+            gl::GL_LINEAR,                                                                 //
+            gl::GL_REPEAT,                                                                 //
             glm::vec3{ (float)grid.width() / 2.0f, (float)grid.height() / 2.0f, 0.0f },    // pos
             glm::vec3{ 1.0f, 1.0f, 1.0f },                                                 // color
             glm::vec3{ grid.width(), grid.height(), 0.0f },                                // scale
@@ -123,13 +124,13 @@ public:
         };
 
         if (isPaused) {
-            glClearColor(0.0f, 0.0f, 0.02f, 1.0f);
+            gl::glClearColor(0.0f, 0.0f, 0.02f, 1.0f);
         } else {
-            glClearColor(0.1f, 0.1f, 0.11f, 1.0f);
+            gl::glClearColor(0.1f, 0.1f, 0.11f, 1.0f);
         }
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        gl::glClear(gl::GL_COLOR_BUFFER_BIT | gl::GL_DEPTH_BUFFER_BIT);
 
-        glViewport(0, 0, winProp.m_width, winProp.m_height);
+        gl::glViewport(0, 0, winProp.m_width, winProp.m_height);
 
         // orthogonal frustum
         // clang-format off

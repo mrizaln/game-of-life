@@ -2,10 +2,8 @@
 #include "game.hpp"
 
 #include <CLI/CLI.hpp>
-#include <GLFW/glfw3.h>
-#include <glad/glad.h>
-
 #include <spdlog/spdlog.h>
+
 #include <string>
 
 int main(int argc, char** argv)

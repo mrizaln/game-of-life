@@ -11,7 +11,7 @@ project("Game of Life" VERSION 2.0)
 
 # external library
 find_package(glfw3 CONFIG REQUIRED)
-find_package(glad CONFIG REQUIRED)
+find_package(glbinding CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(stb CONFIG REQUIRED)
 find_package(PerlinNoise CONFIG REQUIRED)
@@ -27,7 +27,7 @@ function(create_target NAME)
   target_link_libraries(
     ${NAME}
     PRIVATE glfw
-            glad::glad
+            glbinding::glbinding
             glm::glm
             stb::stb
             siv::PerlinNoise

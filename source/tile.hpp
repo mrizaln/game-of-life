@@ -5,7 +5,8 @@
 #include "texture.hpp"
 #include "simple_plane.hpp"
 
-#include <glad/glad.h>
+#include <glbinding/gl/gl.h>
+#define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -59,9 +60,9 @@ public:
         const char*      vShaderDir,
         const char*      fShaderDir,
         const char*      textureDir,
-        int              texMinFilter = GL_LINEAR,
-        int              texMagFilter = GL_LINEAR,
-        int              wrapFilter   = GL_REPEAT,
+        gl::GLenum       texMinFilter = gl::GL_LINEAR,
+        gl::GLenum       texMagFilter = gl::GL_LINEAR,
+        gl::GLenum       wrapFilter   = gl::GL_REPEAT,
         const glm::vec3& position     = { 0.0f, 0.0f, 0.0f },
         const glm::vec3& color        = { 1.0f, 1.0f, 1.0f },
         const glm::vec3& scale        = { 1.0f, 1.0f, 1.0f }
@@ -86,8 +87,8 @@ public:
 
         // set texture
         m_shader.setInt("tex", m_texture.textureUnitNum);
-        glActiveTexture(GL_TEXTURE0 + m_texture.textureUnitNum);
-        glBindTexture(GL_TEXTURE_2D, m_texture.textureID);
+        gl::glActiveTexture(gl::GL_TEXTURE0 + m_texture.textureUnitNum);
+        gl::glBindTexture(gl::GL_TEXTURE_2D, m_texture.textureID);
 
         // draw
         m_plane.draw();

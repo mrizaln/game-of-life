@@ -390,14 +390,14 @@ private:
 
         // wireframe mode
         w.addKeyEventHandler(GLFW_KEY_TAB, 0, A::CALLBACK, [](Window&) {
-            GLint polygonMode[2];
-            glGetIntegerv(GL_POLYGON_MODE, polygonMode);
+            gl::GLint polygonMode[2];
+            gl::glGetIntegerv(gl::GL_POLYGON_MODE, polygonMode);
 
-            bool isWireframe = polygonMode[0] == GL_LINE;
+            bool isWireframe = polygonMode[0] == gl::GL_LINE;
             if (isWireframe) {
-                glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+                gl::glPolygonMode(gl::GL_FRONT_AND_BACK, gl::GL_FILL);
             } else {
-                glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+                gl::glPolygonMode(gl::GL_FRONT_AND_BACK, gl::GL_LINE);
             }
         });
     }
