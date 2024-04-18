@@ -1,6 +1,0 @@
-g++
-%c -std=c17
-%cpp -std=c++20
-%h -x
-%h c++-header
--Iinclude

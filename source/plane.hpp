@@ -2,6 +2,7 @@
 #define PLANE_HPP
 
 #include "unrolled_matrix.hpp"
+
 #include <glad/glad.h>
 
 #include <algorithm>    // std::generate

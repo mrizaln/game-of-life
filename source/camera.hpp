@@ -58,10 +58,10 @@ public:
         float     yaw      = s_YAW
     )
         : front{ glm::vec3(0.0f, 0.0f, -1.0f) }
-        , speed{ s_SPEED }
-        , sensitivity{ s_SENSITIVITY }
         , fov{ s_FOV }
         , zoom{ s_ZOOM }
+        , speed{ s_SPEED }
+        , sensitivity{ s_SENSITIVITY }
     {
         this->position = position;
         this->worldUp  = worldUp;

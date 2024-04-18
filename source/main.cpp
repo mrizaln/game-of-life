@@ -12,19 +12,19 @@ int main(int argc, char** argv)
 {
     CLI::App app{ "Conway's game of life simulation renderer" };
 
-    int   length   = 360;
-    int   width    = 480;
-    float delay    = 1e-5f;
-    float density  = 0.3f;
-    bool  pause    = false;
-    bool  noVsync  = false;
-    bool  debug    = false;
-    auto  strategy = Grid::UpdateStrategy::INTERLEAVED;
+    int         length   = 360;
+    int         width    = 480;
+    std::size_t delay    = 0;
+    float       density  = 0.3f;
+    bool        pause    = false;
+    bool        noVsync  = false;
+    bool        debug    = false;
+    auto        strategy = Grid::UpdateStrategy::INTERLEAVED;
 
     app.add_option("-l,--length", length, "The length of the world grid")->required(true);
     app.add_option("-w,--width", width, "The width of the world grid")->required(true);
     app.add_option("-t,--delay", delay, "Delay for each update (in seconds)");
-    app.add_option("-d,--density", density, "Start density (0.0 - 1.0)");
+    app.add_option("-d,--density", density, "Start density")->check(CLI::Range(0.0f, 1.0f));
     app.add_flag("--paused", pause, "Start the simulation on a paused state");
     app.add_flag("--no-vsync", noVsync, "Turn off vsync");
     app.add_flag("--debug", debug, "Print debugging info");
@@ -38,14 +38,13 @@ int main(int argc, char** argv)
         spdlog::set_level(spdlog::level::debug);
     }
 
-    // limit the scope of Renderer so that it's destructor is called before glfwTerminate
     Application application{ {
         .m_windowWidth    = 800,
         .m_windowHeight   = 600,
         .m_gridWidth      = length,
         .m_gridHeight     = width,
         .m_startDensity   = density,
-        .m_delay          = static_cast<std::size_t>(delay * 1000),    // s to ms
+        .m_delay          = delay,    // s to ms
         .m_vsync          = !noVsync,
         .m_updateStrategy = strategy,
     } };

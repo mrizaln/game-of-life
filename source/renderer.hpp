@@ -13,6 +13,8 @@
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
+#include <cmath>
+#include <type_traits>
 
 class Renderer
 {

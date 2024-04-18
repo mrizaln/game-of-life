@@ -8,7 +8,6 @@
 #include "simulation.hpp"
 #include "window.hpp"
 #include "window_manager.hpp"
-#include <stdexcept>
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -18,6 +17,7 @@
 #include <cmath>
 #include <format>
 #include <optional>
+#include <stdexcept>
 #include <string_view>
 #include <utility>
 
@@ -66,7 +66,7 @@ public:
         // initialize the grid and the buffer
         m_simulation.write([&](Grid& grid) {
             spdlog::info("(Application) Populating grid...");
-            grid.populate(std::clamp(param.m_startDensity, 0.0f, 1.0f));
+            grid.populate(std::clamp(param.m_startDensity, 0.0f, 1.0f));    // clamp, just a sanity check
             auto data = grid.data();
             m_buffer.reset(std::move(data));
             spdlog::info("(Application) Populating grid done.");
