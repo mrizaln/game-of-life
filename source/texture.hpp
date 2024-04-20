@@ -1,175 +1,107 @@
-#ifndef TEXTURE_HPP
-#define TEXTURE_HPP
+#ifndef TEXTURE_HPP_QDZVR1QU
+#define TEXTURE_HPP_QDZVR1QU
+
+#include "shader.hpp"
 
 #include <glbinding/gl/gl.h>
-#define STB_IMAGE_IMPLEMENTATION
-#include <spdlog/spdlog.h>
-#include <stb/stb_image.h>
 
-#include <cstddef>    // std::size_t
-#include <limits>     // std::numeric_limits
-#include <unordered_map>
+#include <type_traits>
+#include <string>
+#include <string_view>
 
+// an abstract base class for all textures
 class Texture
 {
-private:
-    static inline unsigned int s_textureUnitCount{ 0 };
-
-    unsigned char* imageData{};
-
-    gl::GLenum magFilter{};
-    gl::GLenum minFilter{};
-    gl::GLenum wrapFilter{};
-
-    inline static std::unordered_map<std::size_t, gl::GLenum> numChannelsToGLenum{
-        { 1, gl::GL_RED },
-        { 2, gl::GL_RG },
-        { 3, gl::GL_RGB },
-        { 4, gl::GL_RGBA }
-    };
 
 public:
-    static inline constexpr unsigned int maxUnitNum{ std::numeric_limits<unsigned int>::max() };
+    Texture()                          = delete;
+    Texture(const Texture&)            = delete;
+    Texture& operator=(const Texture&) = delete;
 
-    unsigned int textureUnitNum{ maxUnitNum };    // means no texture loaded
-    unsigned int textureID;                       // don't change this value outside of Texture class
-
-    int imageWidth{};
-    int imageHeight{};
-    int nrChannels{};
-
-    Texture(const Texture&) = default;
-
-    // texture but basic material actually
-    Texture(
-        const unsigned char red   = 0x0,
-        const unsigned char green = 0x0,
-        const unsigned char blue  = 0x0
-    )
+    Texture(Texture&& other) noexcept
+        : m_target{ std::exchange(other.m_target, {}) }
+        , m_id{ std::exchange(other.m_id, 0) }
+        , m_unitNum{ std::exchange(other.m_unitNum, -1) }
+        , m_uniformName{ std::move(other.m_uniformName) }
     {
-        textureUnitNum = s_textureUnitCount++;
-
-        nrChannels = 3;
-
-        imageData = new unsigned char[3];
-
-        imageData[0] = red;
-        imageData[1] = green;
-        imageData[2] = blue;
-
-        imageWidth  = 1;
-        imageHeight = 1;
-
-        generateTexture();
-
-        delete[] imageData;
-        imageData = nullptr;
     }
 
-    Texture(
-        unsigned char* colorData,
-        int            width,
-        int            height,
-        int            channels  = 3,
-        gl::GLenum     minFilter = gl::GL_LINEAR,
-        gl::GLenum     magFilter = gl::GL_NEAREST,
-        gl::GLenum     wrap      = gl::GL_REPEAT
-    )
-        : imageData{ colorData }
-        , imageWidth{ width }
-        , imageHeight{ height }
-        , nrChannels{ channels }
+    Texture& operator=(Texture&& other)
     {
-        textureUnitNum = s_textureUnitCount++;
-
-        if (!imageData) {
-            spdlog::error("(Texture) failed to load texture from colorData");
-        } else {
-            spdlog::info("(Shader) Successfully loaded texture from colorData ({})", textureUnitNum);
-            generateTexture(minFilter, magFilter, wrap);
-        }
-    }
-
-    Texture(
-        const char* texFilePath,
-        gl::GLenum  minFilter      = gl::GL_LINEAR,
-        gl::GLenum  magFilter      = gl::GL_NEAREST,
-        gl::GLenum  wrap           = gl::GL_REPEAT,
-        bool        flipVertically = true
-    )
-    {
-        textureUnitNum = s_textureUnitCount++;
-
-        stbi_set_flip_vertically_on_load(flipVertically);
-        imageData = stbi_load(texFilePath, &imageWidth, &imageHeight, &nrChannels, 0);
-
-        if (!imageData) {
-            spdlog::error("(Texture) failed to load texture from '{}'", texFilePath);
-        } else {
-            spdlog::info("(Shader) Successfully loaded texture from '{}' ({})", texFilePath, textureUnitNum);
-            generateTexture(minFilter, magFilter, wrap);
+        if (this == &other) {
+            return *this;
         }
 
-        stbi_image_free(imageData);
-        imageData = nullptr;
+        if (m_id != 0 && m_unitNum != -1) {
+            gl::glDeleteTextures(1, &m_id);
+        }
+
+        m_target      = std::exchange(other.m_target, {});
+        m_id          = std::exchange(other.m_id, 0);
+        m_unitNum     = std::exchange(other.m_unitNum, -1);
+        m_uniformName = std::move(other.m_uniformName);
+
+        return *this;
     }
 
-    void updateTexture(void* data, int width, int height, int numChannels = 3, gl::GLenum dataType = gl::GL_UNSIGNED_BYTE)
+    virtual ~Texture() = 0;    // so that the class can't be instantiated
+
+    gl::GLuint id() const
     {
-        gl::glBindTexture(gl::GL_TEXTURE_2D, textureID);
-        // gl::glTexImage2DGL_TEXTURE_2D, 0, numChannelsToGLenum[numChannels], width, height, 0, numChannelsToGLenum[numChannels], dataType, data);
-        gl::glTexSubImage2D(gl::GL_TEXTURE_2D, 0, 0, 0, width, height, numChannelsToGLenum[numChannels], dataType, data);
-        // gl::glGenerateMipmap(GL_TEXTURE_2D);
+        return m_id;
     }
 
-    void updateMagFilter(gl::GLenum magFilter)
+    gl::GLint unitNum() const
     {
-        gl::glBindTexture(gl::GL_TEXTURE_2D, textureID);
-        gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_MAG_FILTER, magFilter);
+        return m_unitNum;
     }
 
-    void updateMinFilter(gl::GLenum minFilter)
+    std::string_view uniformName() const
     {
-        gl::glBindTexture(gl::GL_TEXTURE_2D, textureID);
-        gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_MIN_FILTER, minFilter);
+        return m_uniformName;
     }
 
-    void updateWrapFilter(gl::GLenum wrap)
+    void setUniformName(std::string name)
     {
-        gl::glBindTexture(gl::GL_TEXTURE_2D, textureID);
-        gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_WRAP_S, wrap);
-        gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_WRAP_T, wrap);
+        m_uniformName = std::move(name);
     }
 
-    void updateFilters(gl::GLenum magFilter, gl::GLenum minFilter, gl::GLenum wrap)
+    void activate(Shader& shader) const
     {
-        gl::glBindTexture(gl::GL_TEXTURE_2D, textureID);
-        gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_MAG_FILTER, magFilter);
-        gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_MIN_FILTER, minFilter);
-        gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_WRAP_S, wrap);
-        gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_WRAP_T, wrap);
+        shader.setUniform(m_uniformName, m_unitNum);
+        gl::glActiveTexture(gl::GL_TEXTURE0 + std::underlying_type_t<gl::GLenum>(m_unitNum));
+        gl::glBindTexture(m_target, m_id);
     }
 
-private:
-    void generateTexture(gl::GLenum minFilter = gl::GL_LINEAR, gl::GLenum magFilter = gl::GL_NEAREST, gl::GLenum wrap = gl::GL_REPEAT)
+protected:
+    gl::GLenum  m_target;
+    gl::GLuint  m_id;
+    gl::GLint   m_unitNum;
+    std::string m_uniformName;
+
+    Texture(gl::GLenum target, gl::GLint unitNum, std::string uniformName)
+        : m_target{ target }
+        , m_id{ 0 }
+        , m_unitNum{ unitNum }
+        , m_uniformName{ std::move(uniformName) }
     {
-        // generate texture
-        gl::glGenTextures(1, &textureID);
+    }
 
-        // bind texture
-        gl::glBindTexture(gl::GL_TEXTURE_2D, textureID);
-
-        // set texture parameters
-        gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_WRAP_S, wrap);
-        gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_WRAP_T, wrap);
-
-        gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_MIN_FILTER, minFilter);
-        gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_MAG_FILTER, magFilter);
-
-        // now generate texture from image
-        gl::glTexImage2D(gl::GL_TEXTURE_2D, 0, numChannelsToGLenum[nrChannels], imageWidth, imageHeight, 0, numChannelsToGLenum[nrChannels], gl::GL_UNSIGNED_BYTE, imageData);
-        gl::glGenerateMipmap(gl::GL_TEXTURE_2D);
+    Texture(gl::GLenum target, gl::GLuint id, gl::GLint unitNum, std::string uniformName)
+        : m_target{ target }
+        , m_id{ id }
+        , m_unitNum{ unitNum }
+        , m_uniformName{ std::move(uniformName) }
+    {
     }
 };
 
-#endif
+// handle the deletion of the texture object, the derived class doesn't need to worry about it
+inline Texture::~Texture()
+{
+    if (m_id != 0 && m_unitNum != -1) {
+        gl::glDeleteTextures(1, &m_id);
+    }
+}
+
+#endif /* end of include guard: TEXTURE_HPP_QDZVR1QU */

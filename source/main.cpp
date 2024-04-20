@@ -21,7 +21,7 @@ int main(int argc, char** argv)
 
     app.add_option("-l,--length", length, "The length of the world grid")->required(true);
     app.add_option("-w,--width", width, "The width of the world grid")->required(true);
-    app.add_option("-t,--delay", delay, "Delay for each update (in seconds)");
+    app.add_option("-t,--delay", delay, "Delay for each update (in milliseconds)");
     app.add_option("-d,--density", density, "Start density")->check(CLI::Range(0.0f, 1.0f));
     app.add_flag("--paused", pause, "Start the simulation on a paused state");
     app.add_flag("--no-vsync", noVsync, "Turn off vsync");

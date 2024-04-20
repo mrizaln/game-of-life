@@ -112,13 +112,23 @@ public:
 
             // clang-format off
             if (cell == LIVE_STATE) {
-                if      (neigbor <  2) { m_back(x, y) -= 1; }
+                if      (neigbor <  2) { m_back(x, y) = (cell == 0 || cell - 1 == 0) ? DEAD_STATE : cell - 1; }
                 else if (neigbor <= 3) { m_back(x, y) = LIVE_STATE; }
-                else                   { m_back(x, y) -= 1; }
+                else                   { m_back(x, y) = (cell == 0 || cell - 1 == 0) ? DEAD_STATE : cell - 1; }
             } else {
                 if      (neigbor == 3) { m_back(x, y) = LIVE_STATE; }
                 else                   { m_back(x, y) = (cell == 0 || cell - 1 == 0) ? DEAD_STATE : cell - 1; }
             }
+
+            // // incorrect but interesting result
+            // if (cell == LIVE_STATE) {
+            //     if      (neigbor <  2) { m_back(x, y) -= 1; }
+            //     else if (neigbor <= 3) { m_back(x, y) = LIVE_STATE; }
+            //     else                   { m_back(x, y) -= 1; }
+            // } else {
+            //     if      (neigbor == 3) { m_back(x, y) = LIVE_STATE; }
+            //     else                   { m_back(x, y) = (cell == 0 || cell - 1 == 0) ? DEAD_STATE : cell - 1; }
+            // }
             // clang-format on
         });
 

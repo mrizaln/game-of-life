@@ -393,7 +393,7 @@ private:
             gl::GLint polygonMode[2];
             gl::glGetIntegerv(gl::GL_POLYGON_MODE, polygonMode);
 
-            bool isWireframe = polygonMode[0] == gl::GL_LINE;
+            bool isWireframe = (gl::GLenum)polygonMode[0] == gl::GL_LINE;
             if (isWireframe) {
                 gl::glPolygonMode(gl::GL_FRONT_AND_BACK, gl::GL_FILL);
             } else {

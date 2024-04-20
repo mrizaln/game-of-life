@@ -1,9 +1,9 @@
 #ifndef GRID_TILE_H
 #define GRID_TILE_H
 
-#include "shader.hpp"
-#include "texture.hpp"
+#include "image_texture.hpp"
 #include "plane.hpp"
+#include "shader.hpp"
 
 #include <glbinding/gl/gl.h>
 #define GLFW_INCLUDE_NONE
@@ -12,11 +12,13 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#include <filesystem>
+
 class GridTile
 {
 private:
-    Plane<float> m_plane;
-    Texture      m_texture{ 0xff, 0xff, 0xff };
+    Plane        m_plane;
+    ImageTexture m_texture;
 
 public:
     glm::vec3 m_position{ 0.0f, 0.0f, 0.0f };
@@ -25,56 +27,53 @@ public:
     Shader    m_shader{};
 
     GridTile()                           = delete;
+    GridTile(const GridTile&)            = delete;
     GridTile& operator=(const GridTile&) = delete;
-
-    // GridTile(const GridTile& tile)
-    //     : m_plane{ tile.m_plane }        // copy plane VAO, VBO, EBO : points to the same plane as copied
-    //     , m_shader{ tile.m_shader }      // copy shader ID           : points to the same shader as copied
-    //     , m_texture{ tile.m_texture }    // copy texture ID          : points to the same texture as copied
-    //     , m_position{ tile.m_position }
-    //     , m_color{ tile.m_color }
-    //     , m_scale{ tile.m_scale }
-
-    // {
-    // }
+    GridTile(GridTile&&)                 = default;
+    GridTile& operator=(GridTile&&)      = default;
 
     GridTile(
-        int              length,
-        int              width,
-        const char*      vShaderDir,
-        const char*      fShaderDir,
-        const char*      textureDir,
-        gl::GLenum       texMinFilter = gl::GL_LINEAR,
-        gl::GLenum       texMagFilter = gl::GL_LINEAR,
-        gl::GLenum       wrapFilter   = gl::GL_REPEAT,
-        const glm::vec3& position     = { 0.0f, 0.0f, 0.0f },
-        const glm::vec3& color        = { 1.0f, 1.0f, 1.0f },
-        const glm::vec3& scale        = { 1.0f, 1.0f, 1.0f }
+        glm::vec<2, int>      subdivision,
+        glm::vec2             textureScaling,
+        std::filesystem::path vShaderDir,
+        std::filesystem::path fShaderDir,
+        std::filesystem::path textureDir,
+        gl::GLenum            texMinFilter,
+        gl::GLenum            texMagFilter,
+        gl::GLenum            wrapFilter,
+        const glm::vec3&      position = { 0.0f, 0.0f, 0.0f },
+        const glm::vec3&      color    = { 1.0f, 1.0f, 1.0f },
+        const glm::vec3&      scale    = { 1.0f, 1.0f, 1.0f }
     )
-        : m_plane{ length, width, true }
-        , m_texture{ textureDir, texMagFilter, texMinFilter, wrapFilter }
+        : m_plane{ 1.0f, subdivision, textureScaling }
+        , m_texture{ [&] {
+            ImageTexture::Specification spec{
+                .m_minFilter  = texMinFilter,
+                .m_magFilter  = texMagFilter,
+                .m_wrapFilter = wrapFilter,
+            };
+            return ImageTexture::from(textureDir, "uTex", 0, std::move(spec)).value();    // throws on failure
+        }() }
         , m_position{ position }
         , m_scale{ scale }
         , m_color{ color }
         , m_shader{ vShaderDir, fShaderDir }
     {
         m_shader.use();
-        m_shader.setInt("uTex", m_texture.textureUnitNum);    // texture
-        m_shader.setVec3("uColor", m_color);                  // color
+        m_shader.setUniform("uColor", m_color);    // color
+        m_texture.activate(m_shader);
     }
 
-    auto& getPlane() { return m_plane; }
+    auto& getPlane()
+    {
+        return m_plane;
+    }
 
-    void draw()
+    void draw(Plane::DrawMode mode)
     {
         m_shader.use();
-
-        // set texture
-        gl::glActiveTexture(gl::GL_TEXTURE0 + m_texture.textureUnitNum);
-        gl::glBindTexture(gl::GL_TEXTURE_2D, m_texture.textureID);
-
-        // draw
-        m_plane.draw();
+        m_texture.activate(m_shader);
+        m_plane.draw(mode);
     }
 };
 
