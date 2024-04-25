@@ -138,7 +138,7 @@ public:
     // zeroes-out the grid
     void clear()
     {
-        m_back = m_front = { m_width, m_height, DEAD_STATE };
+        process_multi([this](long x, long y) { m_back(x, y) = m_front(x, y) = DEAD_STATE; });
     }
 
     // return the number of live neighbors

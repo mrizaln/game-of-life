@@ -16,15 +16,34 @@
 
 class GridTile
 {
-private:
+public:
+    struct PlaneInfo
+    {
+        glm::vec<2, int> m_subdivision;
+        glm::vec2        m_textureScaling;
+        glm::vec3        m_position;
+        glm::vec3        m_color;
+        glm::vec3        m_scale;
+    };
+
+    struct ShaderInfo
+    {
+        std::filesystem::path m_vertexShaderDir;
+        std::filesystem::path m_fragmentShaderDir;
+    };
+
+    struct TextureInfo
+    {
+        std::filesystem::path       m_textureDir;
+        ImageTexture::Specification m_textureSpec;
+    };
+
     Plane        m_plane;
     ImageTexture m_texture;
-
-public:
-    glm::vec3 m_position{ 0.0f, 0.0f, 0.0f };
-    glm::vec3 m_scale{ 1.0f, 1.0f, 1.0f };
-    glm::vec3 m_color{ 1.0f, 1.0f, 1.0f };
-    Shader    m_shader{};
+    glm::vec3    m_position{ 0.0f, 0.0f, 0.0f };
+    glm::vec3    m_scale{ 1.0f, 1.0f, 1.0f };
+    glm::vec3    m_color{ 1.0f, 1.0f, 1.0f };
+    Shader       m_shader{};
 
     GridTile()                           = delete;
     GridTile(const GridTile&)            = delete;
@@ -33,40 +52,23 @@ public:
     GridTile& operator=(GridTile&&)      = default;
 
     GridTile(
-        glm::vec<2, int>      subdivision,
-        glm::vec2             textureScaling,
-        std::filesystem::path vShaderDir,
-        std::filesystem::path fShaderDir,
-        std::filesystem::path textureDir,
-        gl::GLenum            texMinFilter,
-        gl::GLenum            texMagFilter,
-        gl::GLenum            wrapFilter,
-        const glm::vec3&      position = { 0.0f, 0.0f, 0.0f },
-        const glm::vec3&      color    = { 1.0f, 1.0f, 1.0f },
-        const glm::vec3&      scale    = { 1.0f, 1.0f, 1.0f }
+        PlaneInfo   planeInfo,
+        ShaderInfo  shaderInfo,
+        TextureInfo textureInfo
     )
-        : m_plane{ 1.0f, subdivision, textureScaling }
+        : m_plane{ 1.0f, planeInfo.m_subdivision, planeInfo.m_textureScaling }
         , m_texture{ [&] {
-            ImageTexture::Specification spec{
-                .m_minFilter  = texMinFilter,
-                .m_magFilter  = texMagFilter,
-                .m_wrapFilter = wrapFilter,
-            };
-            return ImageTexture::from(textureDir, "uTex", 0, std::move(spec)).value();    // throws on failure
+            auto [textureDir, spec] = std::move(textureInfo);
+            return ImageTexture::from(textureDir, "u_tex", 0, std::move(spec)).value();    // throws on failure
         }() }
-        , m_position{ position }
-        , m_scale{ scale }
-        , m_color{ color }
-        , m_shader{ vShaderDir, fShaderDir }
+        , m_position{ planeInfo.m_position }
+        , m_scale{ planeInfo.m_scale }
+        , m_color{ planeInfo.m_color }
+        , m_shader{ shaderInfo.m_vertexShaderDir, shaderInfo.m_fragmentShaderDir }
     {
         m_shader.use();
-        m_shader.setUniform("uColor", m_color);    // color
+        m_shader.setUniform("u_color", m_color);    // color
         m_texture.activate(m_shader);
-    }
-
-    auto& getPlane()
-    {
-        return m_plane;
     }
 
     void draw(Plane::DrawMode mode)

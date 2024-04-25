@@ -12,8 +12,6 @@
 #include <cstddef>
 #include <vector>
 
-#define ENABLE_NORMAL
-
 class Plane
 {
 public:
@@ -110,11 +108,7 @@ public:
     }
 
 private:
-#ifdef ENABLE_NORMAL
-    inline static gl::GLsizei m_interleavedVerticesStrideSize{ 8 * sizeof(float) };
-#else
     inline static gl::GLsizei m_interleavedVerticesStrideSize{ 5 * sizeof(float) };
-#endif
 
     // buffers
     unsigned int m_vao;
@@ -164,12 +158,6 @@ private:
         // texcoords
         gl::glEnableVertexAttribArray(1);
         gl::glVertexAttribPointer(1, 2, gl::GL_FLOAT, gl::GL_FALSE, m_interleavedVerticesStrideSize, (void*)(3 * sizeof(float)));
-
-#ifdef ENABLE_NORMAL
-        // normal
-        gl::glEnableVertexAttribArray(2);
-        gl::glVertexAttribPointer(2, 3, gl::GL_FLOAT, gl::GL_FALSE, m_interleavedVerticesStrideSize, (void*)(5 * sizeof(float)));
-#endif
 
         // unbind
         //----
@@ -245,8 +233,6 @@ private:
 
     void buildInterleavedVertices()
     {
-        constexpr std::array normal{ 0.0f, 0.0f, 1.0f };
-
         // texture coods multiplied -> much bigger coords -> tiled
         for (const auto& [x, y, z] : m_vertices) {
             // vertices
@@ -257,13 +243,6 @@ private:
             // texCoords
             m_interleavedVertices.push_back((x + 0.5f) * m_textureScaling.x);
             m_interleavedVertices.push_back((y + 0.5f) * m_textureScaling.y);
-
-#ifdef ENABLE_NORMAL
-            // normals
-            m_interleavedVertices.push_back(normal[0]);
-            m_interleavedVertices.push_back(normal[1]);
-            m_interleavedVertices.push_back(normal[2]);
-#endif
         }
     }
 };

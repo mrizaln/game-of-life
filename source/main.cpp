@@ -36,15 +36,20 @@ int main(int argc, char** argv)
         spdlog::set_level(spdlog::level::debug);
     }
 
-    Application application{ {
-        .m_windowWidth    = 800,
-        .m_windowHeight   = 600,
-        .m_gridWidth      = length,
-        .m_gridHeight     = width,
-        .m_startDensity   = density,
-        .m_delay          = delay,    // s to ms
-        .m_vsync          = !noVsync,
-        .m_updateStrategy = strategy,
-    } };
-    application.run();
+    try {
+        Application application{ {
+            .m_windowWidth    = 800,
+            .m_windowHeight   = 600,
+            .m_gridWidth      = length,
+            .m_gridHeight     = width,
+            .m_startDensity   = density,
+            .m_delay          = delay,    // s to ms
+            .m_vsync          = !noVsync,
+            .m_updateStrategy = strategy,
+        } };
+        application.run();
+    } catch (std::exception& e) {
+        spdlog::critical("(main) Exception occurred: {}", e.what());
+        return 1;
+    }
 }

@@ -68,30 +68,46 @@ public:
 
     Renderer(const Window& window, const Grid& grid)
         : m_borderTile{
-            { 1, 1 },
-            { grid.width(), grid.height() },
-            "./resources/shaders/gridShader.vert",
-            "./resources/shaders/gridShader.frag",
-            "./resources/textures/grid.png",
-            gl::GL_LINEAR,
-            gl::GL_LINEAR,
-            gl::GL_REPEAT,
-            glm::vec3{ (float)grid.width() / 2.0f, (float)grid.height() / 2.0f, 0.0f },    // pos
-            glm::vec3{ 1.0f, 1.0f, 1.0f },                                                 // color
-            glm::vec3{ grid.width(), grid.height(), 0.0f },                                // scale
+            GridTile::PlaneInfo{
+                .m_subdivision    = { 1, 1 },
+                .m_textureScaling = { grid.width(), grid.height() },
+                .m_position       = { (float)grid.width() / 2.0f, (float)grid.height() / 2.0f, 0.0f },
+                .m_color          = { 1.0f, 1.0f, 1.0f },
+                .m_scale          = { grid.width(), grid.height(), 0.0f },
+            },
+            GridTile::ShaderInfo{
+                .m_vertexShaderDir   = "./resources/shaders/grid_shader.vert",
+                .m_fragmentShaderDir = "./resources/shaders/grid_shader.frag",
+            },
+            GridTile::TextureInfo{
+                .m_textureDir  = "./resources/textures/grid.png",
+                .m_textureSpec = {
+                    .m_minFilter  = gl::GL_LINEAR,
+                    .m_magFilter  = gl::GL_LINEAR,
+                    .m_wrapFilter = gl::GL_REPEAT,
+                },
+            },
         }
         , m_gridTile{
-            { grid.width(), grid.height() },    // subdivide as much as the grid dimension
-            { grid.width(), grid.height() },
-            "./resources/shaders/gridShader.vert",
-            "./resources/shaders/gridShader.frag",
-            "./resources/textures/cell.png",
-            gl::GL_LINEAR,
-            gl::GL_LINEAR,
-            gl::GL_REPEAT,
-            glm::vec3{ (float)grid.width() / 2.0f, (float)grid.height() / 2.0f, 0.0f },    // pos
-            glm::vec3{ 1.0f, 1.0f, 1.0f },                                                 // color
-            glm::vec3{ grid.width(), grid.height(), 0.0f },                                // scale
+            GridTile::PlaneInfo{
+                .m_subdivision    = { grid.width(), grid.height() },
+                .m_textureScaling = { grid.width(), grid.height() },
+                .m_position       = { (float)grid.width() / 2.0f, (float)grid.height() / 2.0f, 0.0f },
+                .m_color          = { 1.0f, 1.0f, 1.0f },
+                .m_scale          = { grid.width(), grid.height(), 0.0f },
+            },
+            GridTile::ShaderInfo{
+                .m_vertexShaderDir   = "./resources/shaders/grid_shader.vert",
+                .m_fragmentShaderDir = "./resources/shaders/grid_shader.frag",
+            },
+            GridTile::TextureInfo{
+                .m_textureDir  = "./resources/textures/cell.png",
+                .m_textureSpec = {
+                    .m_minFilter  = gl::GL_LINEAR,
+                    .m_magFilter  = gl::GL_LINEAR,
+                    .m_wrapFilter = gl::GL_REPEAT,
+                },
+            },
         }
         , m_camera{}
         , m_gridMode{ GridMode::AUTO }
@@ -302,7 +318,7 @@ private:
     void updateGrid(const Border& border, const Grid::Grid_type& gridData)
     {
         const auto& [x1, x2, y1, y2] = border;
-        m_gridTile.getPlane().customizeIndices(x1, x2, y1, y2, gridData, [](const Grid::Cell& cell) {
+        m_gridTile.m_plane.customizeIndices(x1, x2, y1, y2, gridData, [](const Grid::Cell& cell) {
             return cell == Grid::LIVE_STATE;
         });
     }
@@ -339,14 +355,14 @@ private:
         m_borderTile.m_shader.use();
 
         // upload view and projection matrix
-        m_borderTile.m_shader.setUniform("view", viewMat);
-        m_borderTile.m_shader.setUniform("projection", projMat);
+        m_borderTile.m_shader.setUniform("u_view", viewMat);
+        m_borderTile.m_shader.setUniform("u_projection", projMat);
 
         // model matrix
         glm::mat4 model{ 1.0f };
         model = glm::translate(model, m_borderTile.m_position);
         model = glm::scale(model, m_borderTile.m_scale);
-        m_borderTile.m_shader.setUniform("model", model);
+        m_borderTile.m_shader.setUniform("u_model", model);
 
         // change color if simulation::pause
         if (isPaused) {
@@ -362,14 +378,14 @@ private:
     void drawGrid(const glm::mat4& projMat, const glm::mat4& viewMat)
     {
         m_gridTile.m_shader.use();
-        m_gridTile.m_shader.setUniform("view", viewMat);
-        m_gridTile.m_shader.setUniform("projection", projMat);
+        m_gridTile.m_shader.setUniform("u_view", viewMat);
+        m_gridTile.m_shader.setUniform("u_projection", projMat);
 
         glm::mat4 model{ 1.0f };
         model = glm::translate(model, m_gridTile.m_position);
         model = glm::scale(model, m_gridTile.m_scale);
 
-        m_gridTile.m_shader.setUniform("model", model);
+        m_gridTile.m_shader.setUniform("u_model", model);
 
         m_gridTile.draw(Plane::DrawMode::PARTIAL);
     }
