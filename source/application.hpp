@@ -6,18 +6,14 @@
 #include "game.hpp"
 #include "renderer.hpp"
 #include "simulation.hpp"
-#include "window.hpp"
-#include "window_manager.hpp"
 
-#define GLFW_INCLUDE_NONE
-#include <GLFW/glfw3.h>
+#include <glfw_cpp/glfw_cpp.hpp>
+#include <glbinding/glbinding.h>
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
 #include <cmath>
 #include <format>
-#include <optional>
-#include <stdexcept>
 #include <string_view>
 #include <utility>
 
@@ -43,25 +39,40 @@ public:
     Application& operator=(Application&&)      = delete;
 
     Application(InitParam param)
-        : m_simulation{ param.m_gridWidth, param.m_gridHeight, param.m_updateStrategy, param.m_delay }
-        , m_window{ std::nullopt }
-        , m_renderer{ std::nullopt }
+        : m_context{
+            glfw_cpp::Context::Hint{
+                .m_major   = 3,
+                .m_minor   = 3,
+                .m_profile = glfw_cpp::Context::Profile::CORE,
+            },
+            [](auto handle, auto proc) { glbinding::initialize((glbinding::ContextHandle)handle, proc); }
+        }
+        , m_wm{ m_context }
+        , m_window{ m_wm.createWindow(s_defaultTitle.data(), 800, 600) }
+        , m_simulation{ param.m_gridWidth, param.m_gridHeight, param.m_updateStrategy, param.m_delay }
+        , m_renderer{ m_window, *m_simulation.read([](auto& grid) { return &grid; }) }    // kinda a hack, but eh
         , m_interp{ -1, -1 }
     {
-        glfwInit();
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+        m_context.setErrorCallback([](auto errc, auto msg) {
+            spdlog::error("(GLFW) (Internal | errc: {}) {}", errc, msg);
+        });
+        m_context.setLogCallback([](auto level, auto msg) {
+            // clang-format off
+            auto spdloglevel = [&] { switch (level) {
+                using L = glfw_cpp::Context::LogLevel;
+                case L::DEBUG:                          return spdlog::level::debug;
+                case L::INFO:                           return spdlog::level::info;
+                case L::WARNING:                        return spdlog::level::warn;
+                case L::ERROR:                          return spdlog::level::err;
+                case L::CRITICAL:                       return spdlog::level::critical;
+                case L::NONE:       [[fallthrough]];
+                default:            [[unlikely]]        return spdlog::level::info;
+            } }();
+            // clang-format on
+            spdlog::log(spdloglevel, "(GLFW) {}", msg);
+        });
 
-        WindowManager::createInstance();
-        m_window = WindowManager::createWindow(s_defaultTitle.data(), 800, 600);
-        if (!m_window.has_value()) {
-            spdlog::critical("(Application) Failed to create window");
-            throw std::runtime_error{ "Failed to create window" };
-        }
-        m_window->useHere();
-        m_window->setVsync(param.m_vsync);
-        m_simulation.read([this](const Grid& grid) { m_renderer.emplace(*m_window, grid); });
+        m_window.setVsync(param.m_vsync);
 
         // initialize the grid and the buffer
         m_simulation.write([&](Grid& grid) {
@@ -75,16 +86,6 @@ public:
         configureControl();
     }
 
-    ~Application()
-    {
-        m_simulation.stop();
-        m_renderer.reset();
-        m_window.reset();
-
-        WindowManager::destroyInstance();
-        glfwTerminate();
-    }
-
     void run()
     {
         // launch the simulation
@@ -95,21 +96,24 @@ public:
         });
 
         // render the grid
-        m_window->run([this, timeSum = 0.0]() mutable {
+        m_window.run([this, timeSum = 0.0]() mutable {
             const auto& front = m_buffer.swapBuffers();
-            m_renderer->render(*m_window, front, m_simulation.isPaused());
+            m_renderer.render(m_window, front, m_simulation.isPaused());
 
-            const auto fps = 1.0 / m_window->getDeltaTime();
+            const auto fps = 1.0 / m_window.deltaTime();
             const auto tps = m_simulation.getTickRate();
 
             // update title every 1 seconds
-            if ((timeSum += m_window->getDeltaTime()) > 1.0) {
-                m_window->updateTitle(std::format("{} [{:.2f}FPS|{:.2f}TPS]", s_defaultTitle, fps, tps));
+            if ((timeSum += m_window.deltaTime()) > 1.0) {
+                m_window.updateTitle(std::format("{} [{:.2f}FPS|{:.2f}TPS]", s_defaultTitle, fps, tps));
                 timeSum = 0.0;
             }
 
-            WindowManager::pollEvents();
+            m_wm.pollEvents();
         });
+
+        // stop the simulation thread if window is exited
+        m_simulation.stop();
     }
 
 private:
@@ -173,9 +177,12 @@ private:
 
     static constexpr std::string_view s_defaultTitle = "Game of Life";
 
-    Simulation              m_simulation;
-    std::optional<Window>   m_window;
-    std::optional<Renderer> m_renderer;
+    glfw_cpp::Context       m_context;
+    glfw_cpp::WindowManager m_wm;
+    glfw_cpp::Window        m_window;
+
+    Simulation m_simulation;
+    Renderer   m_renderer;
 
     InterpolationHelper m_interp;
     bool                m_previouslyPaused       = false;
@@ -188,12 +195,15 @@ private:
     {
         // most of the code is here :) (It took me so long to debug the controls)
 
-        auto& w = *m_window;
+        using glfw_cpp::Window;
+        using MBS = glfw_cpp::MouseButton::State;
+        using MBB = glfw_cpp::MouseButton::Button;
+
+        auto& w = m_window;
 
         w.setCursorPosCallback([this](Window& window, double xPos, double yPos) {
-            const auto& winProp{ window.getProperties() };
-            const auto& lastX{ winProp.m_cursorPos.x };
-            const auto& lastY{ winProp.m_cursorPos.y };
+            const auto& winProp{ window.properties() };
+            const auto& [lastX, lastY] = winProp.m_cursorPos;
 
             const float xOffset = static_cast<float>(xPos - lastX);
             const float yOffset = static_cast<float>(lastY - yPos);
@@ -201,11 +211,11 @@ private:
             // instead of normal camera (yaw, pitch, etc.), i'm using this as sliding movement
             // m_camera.processMouseMovement(xOffset, yOffset);
             if (window.isMouseCaptured()) {
-                m_renderer->offsetCameraPosition(xOffset, yOffset, 200.0f);
+                m_renderer.offsetCameraPosition(xOffset, yOffset, 200.0f);
             }
 
-            const auto& camPos  = m_renderer->getCameraPosition();
-            const auto& camZoom = m_renderer->getCameraZoom();
+            const auto& camPos  = m_renderer.getCameraPosition();
+            const auto& camZoom = m_renderer.getCameraZoom();
 
             const auto xDelta = (float)winProp.m_width / camZoom;
             const auto yDelta = (float)winProp.m_height / camZoom;
@@ -215,7 +225,7 @@ private:
             const int x{ static_cast<int>(camPos.x - (xDelta - 2.0f * xPos / camZoom)) };    // col
             const int y{ static_cast<int>(camPos.y - (yDelta - 2.0f * yPos / camZoom)) };    // row
 
-            if (winProp.m_mouseButton.m_left == MouseButton::State::PRESSED) {
+            if (winProp.m_mouseButton.m_left == MBS::PRESSED) {
                 if (m_previouslyLeftPressed) {
                     m_simulation.write([this, x, y](Grid& grid) {
                         m_interp.interpolate(x, y, [&](int col, int row) {
@@ -226,7 +236,7 @@ private:
                     });
                 }
                 m_previouslyLeftPressed = true;
-            } else if (winProp.m_mouseButton.m_right == MouseButton::State::PRESSED) {
+            } else if (winProp.m_mouseButton.m_right == MBS::PRESSED) {
                 if (m_previouslyRightPressed) {
                     m_simulation.write([this, x, y](Grid& grid) {
                         m_interp.interpolate(x, y, [&](int col, int row) {
@@ -239,24 +249,24 @@ private:
                 m_previouslyRightPressed = true;
             }
 
-            if (winProp.m_mouseButton.m_left == MouseButton::State::RELEASED) {
+            if (winProp.m_mouseButton.m_left == MBS::RELEASED) {
                 m_previouslyLeftPressed = false;
-            } else if (winProp.m_mouseButton.m_right == MouseButton::State::RELEASED) {
+            } else if (winProp.m_mouseButton.m_right == MBS::RELEASED) {
                 m_previouslyRightPressed = false;
             }
         });
 
         w.setScrollCallback([this](Window&, double, double yOffset) {
-            m_renderer->offsetCameraZoom(static_cast<float>(yOffset));
+            m_renderer.offsetCameraZoom(static_cast<float>(yOffset));
         });
 
-        w.setMouseButtonCallback([this](Window&, MouseButton::Button button, MouseButton::State state, Window::KeyModifier) {
-            const auto& winProp = m_window->getProperties();
-            const auto& camPos  = m_renderer->getCameraPosition();
-            const auto& camZoom = m_renderer->getCameraZoom();
+        w.setMouseButtonCallback([this](Window&, MBB button, MBS state, Window::KeyModifier) {
+            const auto& winProp = m_window.properties();
+            const auto& camPos  = m_renderer.getCameraPosition();
+            const auto& camZoom = m_renderer.getCameraZoom();
 
-            const auto xPos   = winProp.m_cursorPos.x;
-            const auto yPos   = winProp.m_height - winProp.m_cursorPos.y;
+            const auto xPos   = winProp.m_cursorPos.first;
+            const auto yPos   = winProp.m_height - winProp.m_cursorPos.second;
             const auto xDelta = (float)winProp.m_width / camZoom;
             const auto yDelta = (float)winProp.m_height / camZoom;
 
@@ -264,7 +274,7 @@ private:
             const int x{ static_cast<int>(camPos.x - (xDelta - 2.0f * xPos / camZoom)) };    // col
             const int y{ static_cast<int>(camPos.y - (yDelta - 2.0f * yPos / camZoom)) };    // row
 
-            if (button == MouseButton::Button::LEFT && state == MouseButton::State::PRESSED) {
+            if (button == MBB::LEFT && state == MBS::PRESSED) {
                 m_previouslyPaused = m_simulation.isPaused();
                 m_simulation.setPause(true);
                 m_simulation.wakeUp();
@@ -275,11 +285,11 @@ private:
                     };
                 });
                 m_interp = InterpolationHelper{ x, y };
-            } else if (button == MouseButton::Button::LEFT && state == MouseButton::State::RELEASED) {
+            } else if (button == MBB::LEFT && state == MBS::RELEASED) {
                 m_simulation.setPause(m_previouslyPaused);
             }
 
-            if (button == MouseButton::Button::RIGHT && state == MouseButton::State::PRESSED) {
+            if (button == MBB::RIGHT && state == MBS::PRESSED) {
                 m_previouslyPaused = m_simulation.isPaused();
                 m_simulation.setPause(true);
                 m_simulation.wakeUp();
@@ -290,7 +300,7 @@ private:
                     };
                 });
                 m_interp = InterpolationHelper{ x, y };
-            } else if (button == MouseButton::Button::RIGHT && state == MouseButton::State::RELEASED) {
+            } else if (button == MBB::RIGHT && state == MBS::RELEASED) {
                 m_simulation.setPause(m_previouslyPaused);
             }
         });
@@ -304,24 +314,24 @@ private:
 
         // camera movement
         w.addKeyEventHandler({ GLFW_KEY_W, GLFW_KEY_UP }, 0, A::CONTINUOUS, [this](Window& window) {
-            m_renderer->processCameraMovement(Camera::UPWARD, (float)window.getDeltaTime());
+            m_renderer.processCameraMovement(Camera::UPWARD, (float)window.deltaTime());
         });
         w.addKeyEventHandler({ GLFW_KEY_S, GLFW_KEY_DOWN }, 0, A::CONTINUOUS, [this](Window& window) {
-            m_renderer->processCameraMovement(Camera::DOWNWARD, (float)window.getDeltaTime());
+            m_renderer.processCameraMovement(Camera::DOWNWARD, (float)window.deltaTime());
         });
         w.addKeyEventHandler({ GLFW_KEY_A, GLFW_KEY_LEFT }, 0, A::CONTINUOUS, [this](Window& window) {
-            m_renderer->processCameraMovement(Camera::LEFT, (float)window.getDeltaTime());
+            m_renderer.processCameraMovement(Camera::LEFT, (float)window.deltaTime());
         });
         w.addKeyEventHandler({ GLFW_KEY_D, GLFW_KEY_RIGHT }, 0, A::CONTINUOUS, [this](Window& window) {
-            m_renderer->processCameraMovement(Camera::RIGHT, (float)window.getDeltaTime());
+            m_renderer.processCameraMovement(Camera::RIGHT, (float)window.deltaTime());
         });
 
         // camera speed
         w.addKeyEventHandler(GLFW_KEY_I, 0, A::CONTINUOUS, [this](Window&) {
-            m_renderer->multiplyCameraSpeed(1.01f);
+            m_renderer.multiplyCameraSpeed(1.01f);
         });
         w.addKeyEventHandler(GLFW_KEY_K, 0, A::CONTINUOUS, [this](Window&) {
-            m_renderer->multiplyCameraSpeed(1.0f / 1.01f);
+            m_renderer.multiplyCameraSpeed(1.0f / 1.01f);
         });
 
         // simulation delay
@@ -350,7 +360,7 @@ private:
 
         // reset camera
         w.addKeyEventHandler(GLFW_KEY_BACKSPACE, 0, A::CALLBACK, [this](Window&) {
-            m_renderer->resetCamera(false);
+            m_renderer.resetCamera(false);
         });
 
         // toggle pause
@@ -365,12 +375,12 @@ private:
 
         // fit grid to window
         w.addKeyEventHandler(GLFW_KEY_F, 0, A::CALLBACK, [this](Window&) {
-            m_renderer->fitToWindow();
+            m_renderer.fitToWindow();
         });
 
         // cycle through the grid modes
         w.addKeyEventHandler(GLFW_KEY_G, 0, A::CALLBACK, [this](Window&) {
-            m_renderer->cycleGridMode();
+            m_renderer.cycleGridMode();
         });
 
         // reset grid -> set all cell to dead

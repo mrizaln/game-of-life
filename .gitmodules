@@ -1,3 +1,0 @@
-[submodule "lib/sync-cpp"]
-	path = lib/sync-cpp
-	url = https://github.com/mrizaln/sync-cpp

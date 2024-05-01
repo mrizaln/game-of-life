@@ -5,12 +5,9 @@
 #include "game.hpp"
 #include "grid_tile.hpp"
 #include "plane.hpp"
-#include "window.hpp"
-#include "window_manager.hpp"
 
 #include <glbinding/gl/gl.h>
-#define GLFW_INCLUDE_NONE
-#include <GLFW/glfw3.h>
+#include <glfw_cpp/window.hpp>
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
@@ -66,7 +63,7 @@ public:
     Renderer(Renderer&&)                 = delete;
     Renderer& operator=(Renderer&&)      = delete;
 
-    Renderer(const Window& window, const Grid& grid)
+    Renderer(const glfw_cpp::Window& window, const Grid& grid)
         : m_borderTile{
             GridTile::PlaneInfo{
                 .m_subdivision    = { 1, 1 },
@@ -114,7 +111,7 @@ public:
     {
         m_camera.speed = 100.0f;
 
-        const auto winProp        = window.getProperties();
+        const auto winProp        = window.properties();
         m_cache.m_windowDimension = {
             .m_width  = winProp.m_width,
             .m_height = winProp.m_height,
@@ -127,9 +124,9 @@ public:
         resetCamera(true);
     }
 
-    void render(const Window& window, const Grid::Grid_type& gridData, bool isPaused)
+    void render(const glfw_cpp::Window& window, const Grid::Grid_type& gridData, bool isPaused)
     {
-        const auto winProp        = window.getProperties();
+        const auto winProp        = window.properties();
         m_cache.m_windowDimension = {
             .m_width  = winProp.m_width,
             .m_height = winProp.m_height,

@@ -3,13 +3,11 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_COLOR_DIAGNOSTICS ON)
 
-# compile options add_compile_options(-pg)                                    #
-# enable profiling set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -pg") #
-# enable pofiling
-
 project("Game of Life" VERSION 2.0)
 
-# external library
+include(cmake/prelude.cmake)
+include(cmake/mold.cmake)
+
 find_package(glfw3 CONFIG REQUIRED)
 find_package(glbinding CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
@@ -18,11 +16,11 @@ find_package(PerlinNoise CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 find_package(CLI11 CONFIG REQUIRED)
 
-add_subdirectory(lib/sync-cpp) # emits sync-cpp link target
+# FetchContent: sync-cpp, glfw-cpp
+include(cmake/fetched-lib.cmake)
 
 function(create_target NAME)
-  add_executable(${NAME} source/main.cpp source/window.cpp
-                         source/window_manager.cpp)
+  add_executable(${NAME} source/main.cpp)
   target_include_directories(${NAME} PRIVATE source)
   target_link_libraries(
     ${NAME}
@@ -33,7 +31,8 @@ function(create_target NAME)
             siv::PerlinNoise
             spdlog::spdlog
             CLI11::CLI11
-            sync-cpp)
+            sync-cpp
+            glfw-cpp)
 endfunction()
 
 # targets
