@@ -12,9 +12,11 @@
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
+#include <concepts>
 #include <cmath>
 #include <format>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 
 class Application
@@ -39,39 +41,13 @@ public:
     Application& operator=(Application&&)      = delete;
 
     Application(InitParam param)
-        : m_context{
-            glfw_cpp::Context::Hint{
-                .m_major   = 3,
-                .m_minor   = 3,
-                .m_profile = glfw_cpp::Context::Profile::CORE,
-            },
-            [](auto handle, auto proc) { glbinding::initialize((glbinding::ContextHandle)handle, proc); }
-        }
-        , m_wm{ m_context }
-        , m_window{ m_wm.createWindow(s_defaultTitle.data(), 800, 600) }
+        : m_glfw{ glfwInit() }
+        , m_wm{ m_glfw->createWindowManager() }
+        , m_window{ m_wm.createWindow({}, s_defaultTitle.data(), 800, 600) }
         , m_simulation{ param.m_gridWidth, param.m_gridHeight, param.m_updateStrategy, param.m_delay }
         , m_renderer{ m_window, *m_simulation.read([](auto& grid) { return &grid; }) }    // kinda a hack, but eh
         , m_interp{ -1, -1 }
     {
-        m_context.setErrorCallback([](auto errc, auto msg) {
-            spdlog::error("(GLFW) (Internal | errc: {}) {}", errc, msg);
-        });
-        m_context.setLogCallback([](auto level, auto msg) {
-            // clang-format off
-            auto spdloglevel = [&] { switch (level) {
-                using L = glfw_cpp::Context::LogLevel;
-                case L::DEBUG:                          return spdlog::level::debug;
-                case L::INFO:                           return spdlog::level::info;
-                case L::WARNING:                        return spdlog::level::warn;
-                case L::ERROR:                          return spdlog::level::err;
-                case L::CRITICAL:                       return spdlog::level::critical;
-                case L::NONE:       [[fallthrough]];
-                default:            [[unlikely]]        return spdlog::level::info;
-            } }();
-            // clang-format on
-            spdlog::log(spdloglevel, "(GLFW) {}", msg);
-        });
-
         m_window.setVsync(param.m_vsync);
 
         // initialize the grid and the buffer
@@ -82,8 +58,36 @@ public:
             m_buffer.reset(std::move(data));
             spdlog::info("(Application) Populating grid done.");
         });
+    }
 
-        configureControl();
+    static glfw_cpp::Instance::Handle glfwInit()
+    {
+        glfw_cpp::Api::OpenGL api = {
+            .m_major   = 3,
+            .m_minor   = 3,
+            .m_profile = glfw_cpp::Api::OpenGL::Profile::CORE,
+            .m_loader  = [](auto handle, auto proc) {
+                glbinding::initialize((glbinding::ContextHandle)handle, proc);
+            }
+        };
+        return glfw_cpp::init(std::move(api), glfwLogCallback);
+    }
+
+    static void glfwLogCallback(glfw_cpp::Instance::LogLevel level, std::string msg)
+    {
+        // clang-format off
+        auto spdloglevel = [&] { switch (level) {
+            using L = glfw_cpp::Instance::LogLevel;
+            case L::DEBUG:                          return spdlog::level::debug;
+            case L::INFO:                           return spdlog::level::info;
+            case L::WARNING:                        return spdlog::level::warn;
+            case L::ERROR:                          return spdlog::level::err;
+            case L::CRITICAL:                       return spdlog::level::critical;
+            case L::NONE:       [[fallthrough]];
+            default:            [[unlikely]]        return spdlog::level::info;
+        } }();
+        // clang-format on
+        spdlog::log(spdloglevel, "(GLFW) {}", msg);
     }
 
     void run()
@@ -96,7 +100,9 @@ public:
         });
 
         // render the grid
-        m_window.run([this, timeSum = 0.0]() mutable {
+        m_window.run([this, timeSum = 0.0](auto&& events) mutable {
+            handleEvents(std::move(events));
+
             const auto& front = m_buffer.swapBuffers();
             m_renderer.render(m_window, front, m_simulation.isPaused());
 
@@ -177,9 +183,9 @@ private:
 
     static constexpr std::string_view s_defaultTitle = "Game of Life";
 
-    glfw_cpp::Context       m_context;
-    glfw_cpp::WindowManager m_wm;
-    glfw_cpp::Window        m_window;
+    glfw_cpp::Instance::Handle m_glfw;
+    glfw_cpp::WindowManager    m_wm;
+    glfw_cpp::Window           m_window;
 
     Simulation m_simulation;
     Renderer   m_renderer;
@@ -189,227 +195,250 @@ private:
     bool                m_previouslyLeftPressed  = false;
     bool                m_previouslyRightPressed = false;
 
+    std::pair<double, double> m_lastCursor = {};
+
     DoubleBufferAtomic<Grid::Grid_type> m_buffer;
 
-    void configureControl()
+    void handleEvents(std::deque<glfw_cpp::Event>&& events)
     {
-        // most of the code is here :) (It took me so long to debug the controls)
-
-        using glfw_cpp::Window;
-        using MBS = glfw_cpp::MouseButton::State;
-        using MBB = glfw_cpp::MouseButton::Button;
-
-        auto& w = m_window;
-
-        w.setCursorPosCallback([this](Window& window, double xPos, double yPos) {
-            const auto& winProp{ window.properties() };
-            const auto& [lastX, lastY] = winProp.m_cursorPos;
-
-            const float xOffset = static_cast<float>(xPos - lastX);
-            const float yOffset = static_cast<float>(lastY - yPos);
-
-            // instead of normal camera (yaw, pitch, etc.), i'm using this as sliding movement
-            // m_camera.processMouseMovement(xOffset, yOffset);
-            if (window.isMouseCaptured()) {
-                m_renderer.offsetCameraPosition(xOffset, yOffset, 200.0f);
-            }
-
-            const auto& camPos  = m_renderer.getCameraPosition();
-            const auto& camZoom = m_renderer.getCameraZoom();
-
-            const auto xDelta = (float)winProp.m_width / camZoom;
-            const auto yDelta = (float)winProp.m_height / camZoom;
-
-            // current pos
-            yPos = winProp.m_height - yPos;                                                  // flip y-axis
-            const int x{ static_cast<int>(camPos.x - (xDelta - 2.0f * xPos / camZoom)) };    // col
-            const int y{ static_cast<int>(camPos.y - (yDelta - 2.0f * yPos / camZoom)) };    // row
-
-            if (winProp.m_mouseButton.m_left == MBS::PRESSED) {
-                if (m_previouslyLeftPressed) {
-                    m_simulation.write([this, x, y](Grid& grid) {
-                        m_interp.interpolate(x, y, [&](int col, int row) {
-                            if (grid.isInBound(col, row)) {
-                                grid.get(col, row) = Grid::LIVE_STATE;
-                            };
-                        });
-                    });
+        for (auto& event : events) {
+            event.visit([this](auto& e) {
+                using EV = std::decay_t<decltype(e)>;
+                using E  = glfw_cpp::Event;
+                if constexpr (std::same_as<EV, E::CursorMoved>) {
+                    handleCursorMovedEvent(std::move(e));
+                } else if constexpr (std::same_as<EV, E::ButtonPressed>) {
+                    handleButtonPressedEvent(std::move(e));
+                } else if constexpr (std::same_as<EV, E::KeyPressed>) {
+                    handleKeyPressedEvent(std::move(e));
+                } else if constexpr (std::same_as<EV, E::Scrolled>) {
+                    m_renderer.offsetCameraZoom(static_cast<float>(e.m_yOffset));
+                } else {
+                    /* do nothing */
                 }
-                m_previouslyLeftPressed = true;
-            } else if (winProp.m_mouseButton.m_right == MBS::PRESSED) {
-                if (m_previouslyRightPressed) {
-                    m_simulation.write([this, x, y](Grid& grid) {
-                        m_interp.interpolate(x, y, [&](int col, int row) {
-                            if (grid.isInBound(col, row)) {
-                                grid.get(col, row) = Grid::DEAD_STATE;
-                            };
-                        });
-                    });
-                }
-                m_previouslyRightPressed = true;
-            }
+            });
+        }
 
-            if (winProp.m_mouseButton.m_left == MBS::RELEASED) {
-                m_previouslyLeftPressed = false;
-            } else if (winProp.m_mouseButton.m_right == MBS::RELEASED) {
-                m_previouslyRightPressed = false;
-            }
-        });
-
-        w.setScrollCallback([this](Window&, double, double yOffset) {
-            m_renderer.offsetCameraZoom(static_cast<float>(yOffset));
-        });
-
-        w.setMouseButtonCallback([this](Window&, MBB button, MBS state, Window::KeyModifier) {
-            const auto& winProp = m_window.properties();
-            const auto& camPos  = m_renderer.getCameraPosition();
-            const auto& camZoom = m_renderer.getCameraZoom();
-
-            const auto xPos   = winProp.m_cursorPos.first;
-            const auto yPos   = winProp.m_height - winProp.m_cursorPos.second;
-            const auto xDelta = (float)winProp.m_width / camZoom;
-            const auto yDelta = (float)winProp.m_height / camZoom;
-
-            // current pos
-            const int x{ static_cast<int>(camPos.x - (xDelta - 2.0f * xPos / camZoom)) };    // col
-            const int y{ static_cast<int>(camPos.y - (yDelta - 2.0f * yPos / camZoom)) };    // row
-
-            if (button == MBB::LEFT && state == MBS::PRESSED) {
-                m_previouslyPaused = m_simulation.isPaused();
-                m_simulation.setPause(true);
-                m_simulation.wakeUp();
-
-                m_simulation.write([x, y](Grid& grid) {
-                    if (grid.isInBound(x, y)) {
-                        grid.get(x, y) = Grid::LIVE_STATE;
-                    };
-                });
-                m_interp = InterpolationHelper{ x, y };
-            } else if (button == MBB::LEFT && state == MBS::RELEASED) {
-                m_simulation.setPause(m_previouslyPaused);
-            }
-
-            if (button == MBB::RIGHT && state == MBS::PRESSED) {
-                m_previouslyPaused = m_simulation.isPaused();
-                m_simulation.setPause(true);
-                m_simulation.wakeUp();
-
-                m_simulation.write([x, y](Grid& grid) {
-                    if (grid.isInBound(x, y)) {
-                        grid.get(x, y) = Grid::DEAD_STATE;
-                    };
-                });
-                m_interp = InterpolationHelper{ x, y };
-            } else if (button == MBB::RIGHT && state == MBS::RELEASED) {
-                m_simulation.setPause(m_previouslyPaused);
-            }
-        });
-
-        using A = Window::KeyActionType;
-
-        // close window
-        w.addKeyEventHandler({ GLFW_KEY_Q, GLFW_KEY_ESCAPE }, 0, A::CALLBACK, [](Window& window) {
-            window.requestClose();
-        });
+        // continuous key press
+        // --------------------
+        const auto& keys = m_window.properties().m_keyState;
+        using K          = glfw_cpp::KeyCode;
 
         // camera movement
-        w.addKeyEventHandler({ GLFW_KEY_W, GLFW_KEY_UP }, 0, A::CONTINUOUS, [this](Window& window) {
-            m_renderer.processCameraMovement(Camera::UPWARD, (float)window.deltaTime());
-        });
-        w.addKeyEventHandler({ GLFW_KEY_S, GLFW_KEY_DOWN }, 0, A::CONTINUOUS, [this](Window& window) {
-            m_renderer.processCameraMovement(Camera::DOWNWARD, (float)window.deltaTime());
-        });
-        w.addKeyEventHandler({ GLFW_KEY_A, GLFW_KEY_LEFT }, 0, A::CONTINUOUS, [this](Window& window) {
-            m_renderer.processCameraMovement(Camera::LEFT, (float)window.deltaTime());
-        });
-        w.addKeyEventHandler({ GLFW_KEY_D, GLFW_KEY_RIGHT }, 0, A::CONTINUOUS, [this](Window& window) {
-            m_renderer.processCameraMovement(Camera::RIGHT, (float)window.deltaTime());
-        });
+        if (keys.anyPressed({ K::W, K::UP })) {
+            m_renderer.processCameraMovement(Camera::UPWARD, (float)m_window.deltaTime());
+        }
+        if (keys.anyPressed({ K::S, K::DOWN })) {
+            m_renderer.processCameraMovement(Camera::DOWNWARD, (float)m_window.deltaTime());
+        }
+        if (keys.anyPressed({ K::A, K::LEFT })) {
+            m_renderer.processCameraMovement(Camera::LEFT, (float)m_window.deltaTime());
+        }
+        if (keys.anyPressed({ K::D, K::RIGHT })) {
+            m_renderer.processCameraMovement(Camera::RIGHT, (float)m_window.deltaTime());
+        }
 
         // camera speed
-        w.addKeyEventHandler(GLFW_KEY_I, 0, A::CONTINUOUS, [this](Window&) {
+        if (keys.isPressed(K::I)) {
             m_renderer.multiplyCameraSpeed(1.01f);
-        });
-        w.addKeyEventHandler(GLFW_KEY_K, 0, A::CONTINUOUS, [this](Window&) {
+        } else if (keys.isPressed(K::K)) {
             m_renderer.multiplyCameraSpeed(1.0f / 1.01f);
-        });
+        }
 
         // simulation delay
-        w.addKeyEventHandler(GLFW_KEY_L, 0, A::CONTINUOUS, [this](Window&) {
+        if (keys.isPressed(K::L)) {
             auto newDelay = std::size_t((float)m_simulation.getDelay() * 1.01f);
             m_simulation.setDelay(newDelay);
-        });
-        w.addKeyEventHandler(GLFW_KEY_J, 0, A::CONTINUOUS, [this](Window&) {
+        } else if (keys.isPressed(K::J)) {
             auto newDelay = std::size_t((float)m_simulation.getDelay() / 1.01f);
             if (newDelay <= 5) {
                 m_simulation.setDelay(5);    // minimum of 5 ms
             } else {
                 m_simulation.setDelay(newDelay);
             }
-        });
+        }
+        // --------------------
+    }
 
-        // toggle mouse capture
-        w.addKeyEventHandler(GLFW_KEY_C, GLFW_MOD_ALT, A::CALLBACK, [](Window& window) {
-            window.setCaptureMouse(!window.isMouseCaptured());
-        });
+    void handleCursorMovedEvent(glfw_cpp::Event::CursorMoved&& event)
+    {
+        auto [xPos, yPos]          = event;
+        const auto& [lastX, lastY] = std::exchange(m_lastCursor, { xPos, yPos });
 
-        // toggle vsync
-        w.addKeyEventHandler(GLFW_KEY_V, GLFW_MOD_ALT, A::CALLBACK, [](Window& window) {
-            window.setVsync(!window.isVsyncEnabled());
-        });
+        const auto& [_, __, dim, ___, keys, buttons] = m_window.properties();
 
-        // reset camera
-        w.addKeyEventHandler(GLFW_KEY_BACKSPACE, 0, A::CALLBACK, [this](Window&) {
-            m_renderer.resetCamera(false);
-        });
+        const float xOffset = static_cast<float>(xPos - lastX);
+        const float yOffset = static_cast<float>(lastY - yPos);
 
-        // toggle pause
-        w.addKeyEventHandler(GLFW_KEY_SPACE, 0, A::CALLBACK, [this](Window&) {
-            m_simulation.togglePause();
-        });
+        // instead of normal camera (yaw, pitch, etc.), i'm using this as sliding movement
+        // m_camera.processMouseMovement(xOffset, yOffset);
+        if (m_window.isMouseCaptured()) {
+            m_renderer.offsetCameraPosition(xOffset, yOffset, 200.0f);
+        }
 
-        // force update (if paused, do nothing instead)
-        w.addKeyEventHandler(GLFW_KEY_U, 0, A::CALLBACK, [this](Window&) {
-            m_simulation.forceUpdate();
-        });
+        const auto& camPos  = m_renderer.getCameraPosition();
+        const auto& camZoom = m_renderer.getCameraZoom();
 
-        // fit grid to window
-        w.addKeyEventHandler(GLFW_KEY_F, 0, A::CALLBACK, [this](Window&) {
-            m_renderer.fitToWindow();
-        });
+        const auto xDelta = (float)dim.m_width / camZoom;
+        const auto yDelta = (float)dim.m_height / camZoom;
 
-        // cycle through the grid modes
-        w.addKeyEventHandler(GLFW_KEY_G, 0, A::CALLBACK, [this](Window&) {
-            m_renderer.cycleGridMode();
-        });
+        // current pos
+        yPos = dim.m_height - yPos;                                                      // flip y-axis
+        const int x{ static_cast<int>(camPos.x - (xDelta - 2.0f * xPos / camZoom)) };    // col
+        const int y{ static_cast<int>(camPos.y - (yDelta - 2.0f * yPos / camZoom)) };    // row
 
-        // reset grid -> set all cell to dead
-        w.addKeyEventHandler(GLFW_KEY_R, 0, A::CALLBACK, [this](Window&) {
-            m_simulation.write(&Grid::clear);
-        });
-
-        // populate grid with new random cells
-        w.addKeyEventHandler(GLFW_KEY_P, 0, A::CALLBACK, [this](Window&) {
-            m_simulation.write([](Grid& grid) {
-                spdlog::info("(Application) Populating grid...");
-                auto density = Grid::getRandomProbability() * 0.6f + 0.2f;
-                grid.populate(density);
-                spdlog::info("(Application) Populating grid done.");
-            });
-        });
-
-        // wireframe mode
-        w.addKeyEventHandler(GLFW_KEY_TAB, 0, A::CALLBACK, [](Window&) {
-            gl::GLint polygonMode[2];
-            gl::glGetIntegerv(gl::GL_POLYGON_MODE, polygonMode);
-
-            bool isWireframe = (gl::GLenum)polygonMode[0] == gl::GL_LINE;
-            if (isWireframe) {
-                gl::glPolygonMode(gl::GL_FRONT_AND_BACK, gl::GL_FILL);
-            } else {
-                gl::glPolygonMode(gl::GL_FRONT_AND_BACK, gl::GL_LINE);
+        using M = glfw_cpp::MouseButton;
+        if (buttons.isPressed(M::LEFT)) {
+            if (m_previouslyLeftPressed) {
+                m_simulation.write([this, x, y](Grid& grid) {
+                    m_interp.interpolate(x, y, [&](int col, int row) {
+                        if (grid.isInBound(col, row)) {
+                            grid.get(col, row) = Grid::LIVE_STATE;
+                        };
+                    });
+                });
             }
-        });
+            m_previouslyLeftPressed = true;
+        } else if (buttons.isPressed(M::RIGHT)) {
+            if (m_previouslyRightPressed) {
+                m_simulation.write([this, x, y](Grid& grid) {
+                    m_interp.interpolate(x, y, [&](int col, int row) {
+                        if (grid.isInBound(col, row)) {
+                            grid.get(col, row) = Grid::DEAD_STATE;
+                        };
+                    });
+                });
+            }
+            m_previouslyRightPressed = true;
+        }
+
+        if (!buttons.isPressed(M::LEFT)) {
+            m_previouslyLeftPressed = false;
+        } else if (!buttons.isPressed(M::RIGHT)) {
+            m_previouslyRightPressed = false;
+        }
+    }
+
+    void handleButtonPressedEvent(glfw_cpp::Event::ButtonPressed&& event)
+    {
+        const auto [button, state, mods]            = event;
+        const auto& [_, __, dim, cursor, ___, ____] = m_window.properties();
+
+        const auto& camPos  = m_renderer.getCameraPosition();
+        const auto& camZoom = m_renderer.getCameraZoom();
+
+        const auto xPos   = cursor.m_x;
+        const auto yPos   = dim.m_height - cursor.m_y;
+        const auto xDelta = (float)dim.m_width / camZoom;
+        const auto yDelta = (float)dim.m_height / camZoom;
+
+        // current pos
+        const int x{ static_cast<int>(camPos.x - (xDelta - 2.0f * xPos / camZoom)) };    // col
+        const int y{ static_cast<int>(camPos.y - (yDelta - 2.0f * yPos / camZoom)) };    // row
+
+        using M = glfw_cpp::MouseButton;
+        using S = glfw_cpp::MouseButtonState;
+
+        if (button == M::LEFT && state == S::PRESS) {
+            m_previouslyPaused = m_simulation.isPaused();
+            m_simulation.setPause(true);
+            m_simulation.wakeUp();
+
+            m_simulation.write([x, y](Grid& grid) {
+                if (grid.isInBound(x, y)) {
+                    grid.get(x, y) = Grid::LIVE_STATE;
+                };
+            });
+            m_interp = InterpolationHelper{ x, y };
+        } else if (button == M::LEFT && state == S::RELEASE) {
+            m_simulation.setPause(m_previouslyPaused);
+        }
+
+        if (button == M::RIGHT && state == S::PRESS) {
+            m_previouslyPaused = m_simulation.isPaused();
+            m_simulation.setPause(true);
+            m_simulation.wakeUp();
+
+            m_simulation.write([x, y](Grid& grid) {
+                if (grid.isInBound(x, y)) {
+                    grid.get(x, y) = Grid::DEAD_STATE;
+                };
+            });
+            m_interp = InterpolationHelper{ x, y };
+        } else if (button == M::RIGHT && state == S::RELEASE) {
+            m_simulation.setPause(m_previouslyPaused);
+        }
+    }
+
+    void handleKeyPressedEvent(glfw_cpp::Event::KeyPressed&& event)
+    {
+        const auto [key, _, state, mods] = event;
+
+        if (state != glfw_cpp::KeyState::PRESS) {
+            return;
+        }
+
+        using K = glfw_cpp::KeyCode;
+        using M = glfw_cpp::ModifierKey;
+
+        if (mods.test(M::ALT)) {
+            switch (key) {
+            case K::C:
+                m_window.setCaptureMouse(!m_window.isMouseCaptured());
+                break;
+            case K::V:
+                m_window.setVsync(!m_window.isVsyncEnabled());
+                break;
+            default:
+                [[unlikely]];
+            }
+        } else {
+            switch (key) {
+            case K::Q:
+                m_window.requestClose();
+                break;
+            case K::U:
+                m_simulation.forceUpdate();
+                break;
+            case K::F:
+                m_renderer.fitToWindow();
+                break;
+            case K::G:
+                m_renderer.cycleGridMode();
+                break;
+            case K::R:
+                m_simulation.write(&Grid::clear);
+                break;
+            case K::P:
+                m_simulation.write([](Grid& grid) {
+                    spdlog::info("(Application) Populating grid...");
+                    auto density = Grid::getRandomProbability() * 0.6f + 0.2f;
+                    grid.populate(density);
+                    spdlog::info("(Application) Populating grid done.");
+                });
+                break;
+            case K::SPACE:
+                m_simulation.togglePause();
+                break;
+            case K::BACKSPACE:
+                m_renderer.resetCamera(false);
+                break;
+            case K::TAB:
+            {
+                gl::GLint polygonMode[2];
+                gl::glGetIntegerv(gl::GL_POLYGON_MODE, polygonMode);
+
+                bool isWireframe = (gl::GLenum)polygonMode[0] == gl::GL_LINE;
+                if (isWireframe) {
+                    gl::glPolygonMode(gl::GL_FRONT_AND_BACK, gl::GL_FILL);
+                } else {
+                    gl::glPolygonMode(gl::GL_FRONT_AND_BACK, gl::GL_LINE);
+                }
+            } break;
+            default:
+                [[unlikely]];
+            }
+        }
     }
 };
 

@@ -111,10 +111,10 @@ public:
     {
         m_camera.speed = 100.0f;
 
-        const auto winProp        = window.properties();
+        const auto& dim           = window.properties().m_dimension;
         m_cache.m_windowDimension = {
-            .m_width  = winProp.m_width,
-            .m_height = winProp.m_height,
+            .m_width  = dim.m_width,
+            .m_height = dim.m_height,
         };
         m_cache.m_gridDimension = {
             .m_width  = (int)grid.width(),    // might throw if first element not exist
@@ -126,10 +126,10 @@ public:
 
     void render(const glfw_cpp::Window& window, const Grid::Grid_type& gridData, bool isPaused)
     {
-        const auto winProp        = window.properties();
+        const auto& dim           = window.properties().m_dimension;
         m_cache.m_windowDimension = {
-            .m_width  = winProp.m_width,
-            .m_height = winProp.m_height,
+            .m_width  = dim.m_width,
+            .m_height = dim.m_height,
         };
         m_cache.m_gridDimension = {
             .m_width  = (int)gridData.width(),    // might throw if first element not exist
@@ -143,14 +143,14 @@ public:
         }
         gl::glClear(gl::GL_COLOR_BUFFER_BIT | gl::GL_DEPTH_BUFFER_BIT);
 
-        gl::glViewport(0, 0, winProp.m_width, winProp.m_height);
+        gl::glViewport(0, 0, dim.m_width, dim.m_height);
 
         // orthogonal frustum
         // clang-format off
-        const float left  { -winProp.m_width  / static_cast<float>(m_camera.zoom) };
-        const float right {  winProp.m_width  / static_cast<float>(m_camera.zoom) };
-        const float bottom{ -winProp.m_height / static_cast<float>(m_camera.zoom) };
-        const float top   {  winProp.m_height / static_cast<float>(m_camera.zoom) };
+        const float left  { -dim.m_width  / static_cast<float>(m_camera.zoom) };
+        const float right {  dim.m_width  / static_cast<float>(m_camera.zoom) };
+        const float bottom{ -dim.m_height / static_cast<float>(m_camera.zoom) };
+        const float top   {  dim.m_height / static_cast<float>(m_camera.zoom) };
         const float near  { -10.0f };
         const float far   {  10.0f };
         // clang-format on
